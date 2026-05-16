@@ -11,7 +11,7 @@ from sklearn.model_selection import train_test_split
 
 def load_data(path: str) -> pd.DataFrame:
     """Carga el dataset desde un CSV y devuelve el DataFrame."""
-    pass
+    return pd.read_csv(path)
 
 
 def clean_data(df: pd.DataFrame) -> pd.DataFrame:
@@ -54,3 +54,17 @@ def split_data(df: pd.DataFrame, test_size: float = 0.2, random_state: int = 42)
 def get_feature_columns() -> list:
     """Devuelve la lista de columnas que entran al modelo después del preprocesamiento."""
     pass
+
+
+def describe_dataset(df: pd.DataFrame) -> None:
+    """Imprime un resumen formal del dataset: dimensiones, clases, tipos y nulos."""
+    print(f"Dimensiones: {df.shape[0]:,} filas × {df.shape[1]} columnas")
+    print(f"\nDistribución de clases:")
+    print(df['is_fraud'].value_counts().rename({0: 'Normal', 1: 'Fraude'}))
+    print(f"\nPorcentaje de fraude: {df['is_fraud'].mean()*100:.2f}%")
+    print(f"\nTipos de datos:")
+    print(df.dtypes)
+    print(f"\nValores nulos:")
+    nulos = df.isnull().sum()
+    nulos = nulos[nulos > 0]
+    print(nulos if not nulos.empty else "Ninguno")
