@@ -31,7 +31,7 @@ Licencia: No especificada · Usabilidad Kaggle: 5.29/10
 
 Dataset sintético de transacciones con tarjeta de crédito, generado con la herramienta **Sparkov Data Generation** (Brandon Harris). Cubre el período enero 2019 – diciembre 2020, con 1,000 clientes y 800 comerciantes simulados. Los patrones de comportamiento (frecuencia, montos por categoría, distribución temporal) se definen mediante perfiles JSON que el simulador usa con la librería Faker.
 
-1,852,394 transacciones, 22 columnas y 0.52% fraudes
+1,852,394 transacciones, 23 columnas (22 variables del dataset + índice del archivo) y 0.52% fraudes
 
 ## Modelos
 
