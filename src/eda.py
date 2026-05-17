@@ -113,6 +113,74 @@ def plot_time_patterns(df: pd.DataFrame) -> None:
     plt.show()
 
 
+def plot_ranges(df: pd.DataFrame) -> None:
+    numeric_cols = df.select_dtypes(include='number')
+    stats = pd.DataFrame({
+        'min': numeric_cols.min(),
+        'max': numeric_cols.max(),
+        'rango': numeric_cols.max() - numeric_cols.min()
+    }).sort_values('rango', ascending=False)
+
+    print("Min, max y rango por variable numérica:")
+    print(stats.to_string(float_format=lambda x: f'{x:,.2f}'))
+
+    plt.figure(figsize=(10, 5))
+    stats['rango'].plot(kind='bar', color='steelblue', edgecolor='white')
+    plt.title('Rango de variables numéricas')
+    plt.ylabel('Rango (max - min)')
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_correlation_matrix(df: pd.DataFrame) -> None:
+    numeric_cols = df.select_dtypes(include='number').drop(columns=['is_fraud'], errors='ignore')
+    corr = numeric_cols.corr()
+
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(corr, annot=True, fmt='.2f', cmap='coolwarm', center=0,
+                linewidths=0.5, annot_kws={'size': 8})
+    plt.title('Matriz de correlación — variables numéricas')
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_numeric_analysis(df: pd.DataFrame) -> None:
+    numeric_cols = df.select_dtypes(include='number')
+    stats = pd.DataFrame({
+        'min': numeric_cols.min(),
+        'max': numeric_cols.max(),
+        'rango': numeric_cols.max() - numeric_cols.min()
+    }).sort_values('rango', ascending=False)
+
+    print("Min, max y rango por columna numérica:")
+    print(stats.to_string(float_format=lambda x: f'{x:,.2f}'))
+
+    corr = numeric_cols.corr()
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(corr, annot=True, fmt='.2f', cmap='coolwarm', center=0,
+                linewidths=0.5, annot_kws={'size': 7})
+    plt.title('Correlación entre columnas numéricas (dataset crudo)')
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_text_analysis(df: pd.DataFrame) -> None:
+    text_cols = df.select_dtypes(include='object')
+    cardinality = text_cols.nunique().sort_values(ascending=False)
+
+    print("Cardinalidad de columnas de texto (valores únicos):")
+    print(cardinality.to_string())
+
+    plt.figure(figsize=(8, 5))
+    cardinality.plot(kind='barh', color='steelblue', edgecolor='white')
+    plt.title('Cardinalidad de columnas de texto')
+    plt.xlabel('Valores únicos')
+    plt.gca().invert_yaxis()
+    plt.tight_layout()
+    plt.show()
+
+
 def plot_fraud_by_gender(df: pd.DataFrame) -> None:
     stats = df.groupby('gender')['is_fraud'].agg(['sum', 'count', 'mean']).reset_index()
     stats.columns = ['Género', 'Fraudes', 'Total', 'Tasa']
