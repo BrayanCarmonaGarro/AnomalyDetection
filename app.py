@@ -11,7 +11,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
-from src.preprocessing import feature_engineering, normalize, get_feature_columns
+from src.preprocessing import feature_engineering, scale_data, get_feature_columns
 from src.models import load_isolation_forest, load_autoencoder, predict_isolation_forest, predict_autoencoder
 
 # ---------------------------------------------------------------------------

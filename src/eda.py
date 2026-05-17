@@ -140,7 +140,7 @@ def plot_correlation_matrix(df: pd.DataFrame) -> None:
     plt.figure(figsize=(10, 8))
     sns.heatmap(corr, annot=True, fmt='.2f', cmap='coolwarm', center=0,
                 linewidths=0.5, annot_kws={'size': 8})
-    plt.title('Matriz de correlación — variables numéricas')
+    plt.title('Matriz de correlación, variables numéricas')
     plt.tight_layout()
     plt.show()
 

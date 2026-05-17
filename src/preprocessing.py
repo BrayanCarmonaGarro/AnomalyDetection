@@ -1,6 +1,6 @@
 """
 preprocessing.py
-Carga, limpieza, feature engineering, normalización y split del dataset.
+Carga, limpieza, feature engineering, escalado y split del dataset.
 """
 
 import pandas as pd
