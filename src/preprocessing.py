@@ -86,7 +86,9 @@ def split_data(df: pd.DataFrame, test_size: float = 0.2, random_state: int = 42)
     Separa en train y test estratificado por is_fraud.
     El modelo se entrena solo con transacciones normales (is_fraud == 0).
     Las etiquetas se reservan únicamente para evaluación.
-    Devuelve (X_train, X_test, y_test).
+    Devuelve (X_train, X_test, y_train, y_test).
+    y_train contiene las etiquetas del split completo (antes de filtrar solo normales),
+    lo que permite calcular la tasa de contaminación real del conjunto de entrenamiento.
     """
     X = df.drop(columns=['is_fraud'])
     y = df['is_fraud']
@@ -94,7 +96,7 @@ def split_data(df: pd.DataFrame, test_size: float = 0.2, random_state: int = 42)
         X, y, test_size=test_size, random_state=random_state, stratify=y
     )
     X_train = X_train[y_train == 0]
-    return X_train, X_test, y_test
+    return X_train, X_test, y_train, y_test
 
 
 def get_feature_columns() -> list:
