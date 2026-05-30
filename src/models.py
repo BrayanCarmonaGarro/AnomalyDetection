@@ -95,29 +95,86 @@ def load_lof(path: str = "models/lof.pkl") -> LocalOutlierFactor:
 # Autoencoder
 # ---------------------------------------------------------------------------
 
-def build_autoencoder(input_dim: int, encoding_dim: int = 16):
+def build_autoencoder(input_dim: int, encoding_dim: int = 8):
     """
-    Construye la arquitectura del Autoencoder.
-    Devuelve el modelo Keras compilado.
+    Construye la arquitectura encoder-bottleneck-decoder.
+    Arquitectura: input_dim → 16 → encoding_dim → 16 → input_dim
+    La salida usa activación linear porque los datos están estandarizados (media 0).
+    Devuelve el modelo Keras compilado con Adam y loss MSE.
     """
-    pass
+    from tensorflow import keras
+    from tensorflow.keras.layers import Dense
+
+    model = keras.Sequential([
+        Dense(16, activation='relu', input_shape=(input_dim,)),  # encoder
+        Dense(encoding_dim, activation='relu'),                   # bottleneck
+        Dense(16, activation='relu'),                             # decoder
+        Dense(input_dim, activation='linear'),                    # reconstrucción
+    ])
+    model.compile(optimizer='adam', loss='mse')
+    return model
 
 
-def train_autoencoder(X_train: np.ndarray, encoding_dim: int = 16, epochs: int = 50, batch_size: int = 256):
+def train_autoencoder(X_train: np.ndarray, y_train: np.ndarray,
+                      encoding_dim: int = 8,
+                      epochs: int = 50, batch_size: int = 512,
+                      contamination: float = 0.01,
+                      validation_split: float = 0.1,
+                      patience: int = 5):
     """
-    Entrena el Autoencoder sobre transacciones normales.
-    Devuelve (model, threshold) donde threshold es el percentil 95 del error de reconstrucción en train.
+    Filtra X_train a solo transacciones normales (y_train == 0) y entrena el
+    Autoencoder sobre ellas (entrada = salida objetivo).
+    Usa EarlyStopping con monitor='val_loss' para evitar sobreajuste.
+    Devuelve (model, history, threshold) donde:
+    - history: objeto Keras History para la curva de aprendizaje
+    - threshold: percentil (1 - contamination) del MSE sobre transacciones normales
     """
-    pass
+    from tensorflow import keras
+
+    # Filtrar solo transacciones normales para el entrenamiento no supervisado
+    X_train_normal = X_train[y_train == 0]
+
+    input_dim = X_train_normal.shape[1]
+    model = build_autoencoder(input_dim, encoding_dim)
+
+    early_stopping = keras.callbacks.EarlyStopping(
+        monitor='val_loss',
+        patience=patience,
+        restore_best_weights=True,
+        verbose=1,
+    )
+
+    history = model.fit(
+        X_train_normal, X_train_normal,
+        epochs=epochs,
+        batch_size=batch_size,
+        validation_split=validation_split,
+        callbacks=[early_stopping],
+        verbose=0,
+    )
+
+    # Umbral basado en el error de reconstrucción sobre transacciones normales
+    train_preds = model.predict(X_train_normal, verbose=0)
+    train_errors = np.mean((X_train_normal - train_preds) ** 2, axis=1)
+    threshold = float(np.percentile(train_errors, 100 * (1 - contamination)))
+
+    return model, history, threshold
 
 
 def predict_autoencoder(model, X: np.ndarray, threshold: float):
     """
     Devuelve (labels, scores) donde:
-    - labels: 1 = anómalo (error > threshold), 0 = normal
-    - scores: error de reconstrucción normalizado en [0, 1]
+    - labels: 1 = anómalo (MSE >= threshold), 0 = normal
+    - scores: error de reconstrucción normalizado en [0, 1] (mayor = más anómalo)
+    Mismo patrón que predict_isolation_forest y predict_lof.
     """
-    pass
+    preds = model.predict(X, verbose=0)
+    raw_errors = np.mean((X - preds) ** 2, axis=1)
+
+    scores = (raw_errors - raw_errors.min()) / (raw_errors.max() - raw_errors.min())
+    labels = (raw_errors >= threshold).astype(int)
+
+    return labels, scores
 
 
 # ---------------------------------------------------------------------------
@@ -135,11 +192,20 @@ def load_isolation_forest(path: str = "models/isolation_forest.pkl") -> Isolatio
     return joblib.load(path)
 
 
-def save_autoencoder(model, threshold: float, model_path: str = "models/autoencoder.keras", threshold_path: str = "models/ae_threshold.pkl"):
-    """Guarda el Autoencoder (formato Keras) y el threshold (joblib)."""
-    pass
+def save_autoencoder(model, threshold: float,
+                     model_path: str = "models/autoencoder.keras",
+                     threshold_path: str = "models/ae_threshold.pkl"):
+    """Guarda el Autoencoder (formato Keras nativo) y el threshold (joblib)."""
+    model.save(model_path)
+    joblib.dump(threshold, threshold_path)
+    print(f"Autoencoder guardado en {model_path}")
+    print(f"Umbral guardado en {threshold_path}")
 
 
-def load_autoencoder(model_path: str = "models/autoencoder.keras", threshold_path: str = "models/ae_threshold.pkl"):
+def load_autoencoder(model_path: str = "models/autoencoder.keras",
+                     threshold_path: str = "models/ae_threshold.pkl"):
     """Carga el Autoencoder y su threshold desde disco. Devuelve (model, threshold)."""
-    pass
+    from tensorflow import keras
+    model = keras.models.load_model(model_path)
+    threshold = joblib.load(threshold_path)
+    return model, threshold

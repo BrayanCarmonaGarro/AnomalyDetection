@@ -108,6 +108,24 @@ def find_optimal_threshold(y_true: np.ndarray, scores: np.ndarray):
     return best_threshold, best_labels
 
 
+def plot_learning_curve(history, model_name: str = ""):
+    """
+    Grafica la evolución del loss (MSE) de entrenamiento y validación época a época.
+    Recibe el objeto History devuelto por model.fit().
+    Útil para verificar que el modelo convergió y que EarlyStopping se activó correctamente.
+    """
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.plot(history.history['loss'], color="#2563EB", lw=2, label='Entrenamiento')
+    ax.plot(history.history['val_loss'], color="#EF4444", lw=2, label='Validación')
+    ax.set_xlabel("Época", fontsize=11)
+    ax.set_ylabel("Loss (MSE)", fontsize=11)
+    ax.set_title(f"Curva de Aprendizaje — {model_name}", fontsize=13)
+    ax.legend(fontsize=11)
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+
 def plot_precision_recall_curve(y_true: np.ndarray, scores: np.ndarray, threshold: float = None, model_name: str = ""):
     """
     Grafica la curva Precision-Recall.
