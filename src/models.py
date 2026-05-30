@@ -17,7 +17,14 @@ def train_isolation_forest(X_train: np.ndarray, contamination: float = 0.01, ran
     Entrena un Isolation Forest sobre transacciones normales.
     contamination: proporción esperada de anomalías en el dataset de evaluación.
     """
-    pass
+    model = IsolationForest(
+        n_estimators=100,
+        contamination=contamination,
+        random_state=random_state,
+        n_jobs=-1,
+    )
+    model.fit(X_train)
+    return model
 
 
 def predict_isolation_forest(model: IsolationForest, X: np.ndarray):
@@ -26,7 +33,15 @@ def predict_isolation_forest(model: IsolationForest, X: np.ndarray):
     - labels: 1 = anómalo, 0 = normal
     - scores: nivel de anomalía normalizado en [0, 1] (mayor = más anómalo)
     """
-    pass
+    raw_scores = model.score_samples(X)  # más negativo → más anómalo
+    # Invertir y normalizar al rango [0, 1]
+    scores = -raw_scores
+    scores = (scores - scores.min()) / (scores.max() - scores.min())
+
+    sklearn_labels = model.predict(X)  # -1 = anómalo, 1 = normal
+    labels = (sklearn_labels == -1).astype(int)
+
+    return labels, scores
 
 
 # ---------------------------------------------------------------------------
@@ -64,12 +79,13 @@ def predict_autoencoder(model, X: np.ndarray, threshold: float):
 
 def save_isolation_forest(model: IsolationForest, path: str = "models/isolation_forest.pkl"):
     """Guarda el modelo Isolation Forest con joblib."""
-    pass
+    joblib.dump(model, path)
+    print(f"Modelo guardado en {path}")
 
 
 def load_isolation_forest(path: str = "models/isolation_forest.pkl") -> IsolationForest:
     """Carga el modelo Isolation Forest desde disco."""
-    pass
+    return joblib.load(path)
 
 
 def save_autoencoder(model, threshold: float, model_path: str = "models/autoencoder.keras", threshold_path: str = "models/ae_threshold.pkl"):
