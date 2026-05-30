@@ -1,23 +1,49 @@
 """
 models.py
-Entrenamiento, predicción y serialización de Isolation Forest y Autoencoder.
+Entrenamiento, predicción y serialización de modelos no supervisados (ML y redes).
 """
 
 import numpy as np
 import joblib
 from sklearn.ensemble import IsolationForest
 from sklearn.neighbors import LocalOutlierFactor
+from sklearn.svm import OneClassSVM
+
+
+# ---------------------------------------------------------------------------
+# Utilidades de score
+# ---------------------------------------------------------------------------
+
+def normalize_scores(scores: np.ndarray, ref_min: float = None, ref_max: float = None):
+    """
+    Normaliza scores al rango [0, 1] usando referencia fija (p. ej. min/max de val).
+    Si ref_min/ref_max son None, usa min/max del batch actual.
+    Devuelve (scores_norm, ref_min, ref_max).
+    """
+    scores = np.asarray(scores, dtype=float)
+    if ref_min is None:
+        ref_min = float(scores.min())
+    if ref_max is None:
+        ref_max = float(scores.max())
+    denom = ref_max - ref_min
+    if denom < 1e-12:
+        return np.zeros_like(scores), ref_min, ref_max
+    return (scores - ref_min) / denom, ref_min, ref_max
+
+
+def score_refs_from_array(scores: np.ndarray) -> tuple[float, float]:
+    scores = np.asarray(scores, dtype=float)
+    return float(scores.min()), float(scores.max())
 
 
 # ---------------------------------------------------------------------------
 # Isolation Forest
 # ---------------------------------------------------------------------------
 
-def train_isolation_forest(X_train: np.ndarray, contamination: float = 0.01, random_state: int = 42) -> IsolationForest:
-    """
-    Entrena un Isolation Forest sobre transacciones normales.
-    contamination: proporción esperada de anomalías en el dataset de evaluación.
-    """
+def train_isolation_forest(
+    X_train: np.ndarray, contamination: float = 0.01, random_state: int = 42
+) -> IsolationForest:
+    """Entrena un Isolation Forest sobre transacciones normales."""
     model = IsolationForest(
         n_estimators=100,
         contamination=contamination,
@@ -28,32 +54,38 @@ def train_isolation_forest(X_train: np.ndarray, contamination: float = 0.01, ran
     return model
 
 
-def predict_isolation_forest(model: IsolationForest, X: np.ndarray):
+def predict_isolation_forest(
+    model: IsolationForest, X: np.ndarray, ref_min: float = None, ref_max: float = None
+):
     """
-    Devuelve (labels, scores) donde:
-    - labels: 1 = anómalo, 0 = normal
-    - scores: nivel de anomalía normalizado en [0, 1] (mayor = más anómalo)
+    Devuelve (labels, scores). scores en [0, 1]; labels: 1 = anómalo.
+    ref_min/ref_max fijan la normalización (p. ej. min/max de val aplicados a test).
     """
-    raw_scores = model.score_samples(X)  # más negativo → más anómalo
-    # Invertir y normalizar al rango [0, 1]
-    scores = -raw_scores
-    scores = (scores - scores.min()) / (scores.max() - scores.min())
-
-    sklearn_labels = model.predict(X)  # -1 = anómalo, 1 = normal
+    raw_scores = -model.score_samples(X)
+    scores, _, _ = normalize_scores(raw_scores, ref_min, ref_max)
+    sklearn_labels = model.predict(X)
     labels = (sklearn_labels == -1).astype(int)
-
     return labels, scores
+
+
+def predict_isolation_forest_with_refs(
+    model: IsolationForest, X: np.ndarray, ref_min: float = None, ref_max: float = None
+):
+    """Como predict_isolation_forest pero devuelve también ref_min y ref_max."""
+    raw_scores = -model.score_samples(X)
+    scores, ref_min, ref_max = normalize_scores(raw_scores, ref_min, ref_max)
+    labels = (model.predict(X) == -1).astype(int)
+    return labels, scores, ref_min, ref_max
 
 
 # ---------------------------------------------------------------------------
 # Local Outlier Factor
 # ---------------------------------------------------------------------------
 
-def train_lof(X_train: np.ndarray, n_neighbors: int = 20, contamination: float = 0.01) -> LocalOutlierFactor:
-    """
-    Entrena un LOF con novelty=True sobre transacciones normales.
-    novelty=True es obligatorio para llamar predict() y decision_function() sobre datos nuevos.
-    """
+def train_lof(
+    X_train: np.ndarray, n_neighbors: int = 20, contamination: float = 0.01
+) -> LocalOutlierFactor:
+    """Entrena LOF con novelty=True sobre transacciones normales."""
     model = LocalOutlierFactor(
         n_neighbors=n_neighbors,
         contamination=contamination,
@@ -64,44 +96,81 @@ def train_lof(X_train: np.ndarray, n_neighbors: int = 20, contamination: float =
     return model
 
 
-def predict_lof(model: LocalOutlierFactor, X: np.ndarray):
-    """
-    Devuelve (labels, scores) donde:
-    - labels: 1 = anómalo, 0 = normal
-    - scores: nivel de anomalía normalizado en [0, 1] (mayor = más anómalo)
-    """
-    raw_scores = model.decision_function(X)  # más negativo → más anómalo
-    scores = -raw_scores
-    scores = (scores - scores.min()) / (scores.max() - scores.min())
-
-    sklearn_labels = model.predict(X)  # -1 = anómalo, 1 = normal
-    labels = (sklearn_labels == -1).astype(int)
-
+def predict_lof(
+    model: LocalOutlierFactor, X: np.ndarray, ref_min: float = None, ref_max: float = None
+):
+    """Devuelve (labels, scores)."""
+    raw_scores = -model.decision_function(X)
+    scores, _, _ = normalize_scores(raw_scores, ref_min, ref_max)
+    labels = (model.predict(X) == -1).astype(int)
     return labels, scores
 
 
+def predict_lof_with_refs(
+    model: LocalOutlierFactor, X: np.ndarray, ref_min: float = None, ref_max: float = None
+):
+    raw_scores = -model.decision_function(X)
+    scores, ref_min, ref_max = normalize_scores(raw_scores, ref_min, ref_max)
+    labels = (model.predict(X) == -1).astype(int)
+    return labels, scores, ref_min, ref_max
+
+
 def save_lof(model: LocalOutlierFactor, path: str = "models/lof.pkl"):
-    """Guarda el modelo LOF con joblib."""
     joblib.dump(model, path)
     print(f"Modelo guardado en {path}")
 
 
 def load_lof(path: str = "models/lof.pkl") -> LocalOutlierFactor:
-    """Carga el modelo LOF desde disco."""
     return joblib.load(path)
 
 
 # ---------------------------------------------------------------------------
-# Autoencoder
+# One-Class SVM
+# ---------------------------------------------------------------------------
+
+def train_one_class_svm(
+    X_train: np.ndarray, nu: float = 0.0052, gamma: str = "scale"
+) -> OneClassSVM:
+    """Entrena One-Class SVM sobre transacciones normales."""
+    model = OneClassSVM(kernel="rbf", nu=nu, gamma=gamma)
+    model.fit(X_train)
+    return model
+
+
+def predict_one_class_svm(
+    model: OneClassSVM, X: np.ndarray, ref_min: float = None, ref_max: float = None
+):
+    """Devuelve (labels, scores)."""
+    raw_scores = -model.decision_function(X)
+    scores, _, _ = normalize_scores(raw_scores, ref_min, ref_max)
+    labels = (model.predict(X) == -1).astype(int)
+    return labels, scores
+
+
+def predict_one_class_svm_with_refs(
+    model: OneClassSVM, X: np.ndarray, ref_min: float = None, ref_max: float = None
+):
+    raw_scores = -model.decision_function(X)
+    scores, ref_min, ref_max = normalize_scores(raw_scores, ref_min, ref_max)
+    labels = (model.predict(X) == -1).astype(int)
+    return labels, scores, ref_min, ref_max
+
+
+def save_one_class_svm(model: OneClassSVM, path: str = "models/ocsvm.pkl"):
+    joblib.dump(model, path)
+    print(f"Modelo guardado en {path}")
+
+
+def load_one_class_svm(path: str = "models/ocsvm.pkl") -> OneClassSVM:
+    return joblib.load(path)
+
+
+# ---------------------------------------------------------------------------
+# Autoencoder (vanilla y denoising)
 # ---------------------------------------------------------------------------
 
 def build_autoencoder(input_dim: int, encoding_dim: int = 8):
-    """
-    Construye la arquitectura encoder-bottleneck-decoder.
-    Arquitectura: input_dim → 16 → encoding_dim → 16 → input_dim
-    La salida usa activación linear porque los datos están estandarizados (media 0).
-    Devuelve el modelo Keras compilado con Adam y loss MSE.
-    """
+    """Autoencoder clásico: input → 16 → bottleneck → 16 → output."""
     from tensorflow import keras
     from tensorflow.keras.layers import Dense, Input
 
@@ -116,44 +185,79 @@ def build_autoencoder(input_dim: int, encoding_dim: int = 8):
     return model
 
 
-def train_autoencoder(X_train: np.ndarray, y_train: np.ndarray,
-                      encoding_dim: int = 8,
-                      epochs: int = 50, batch_size: int = 512,
-                      contamination: float = 0.01,
-                      validation_split: float = 0.1,
-                      patience: int = 5):
+def build_denoising_autoencoder(
+    input_dim: int, encoding_dim: int = 4, noise_factor: float = 0.05
+):
     """
-    Filtra X_train a solo transacciones normales (y_train == 0) y entrena el
-    Autoencoder sobre ellas (entrada = salida objetivo).
-    Usa EarlyStopping con monitor='val_loss' para evitar sobreajuste.
-    Devuelve (model, history, threshold) donde:
-    - history: objeto Keras History para la curva de aprendizaje
-    - threshold: percentil (1 - contamination) del MSE sobre transacciones normales
+    Denoising Autoencoder: GaussianNoise en entrenamiento (inactivo en inferencia),
+    cuello de botella agresivo y Dropout como regularización extra.
+
+    Arquitectura: input → GaussianNoise → 16 → encoding_dim → 16 → output
+    """
+    from tensorflow import keras
+    from tensorflow.keras.layers import Dense, Input, Dropout, GaussianNoise
+
+    inputs = Input(shape=(input_dim,))
+    x = GaussianNoise(noise_factor)(inputs)
+    x = Dense(16, activation='relu')(x)
+    x = Dropout(0.2)(x)
+    encoded = Dense(encoding_dim, activation='relu')(x)
+    x = Dense(16, activation='relu')(encoded)
+    x = Dropout(0.2)(x)
+    outputs = Dense(input_dim, activation='linear')(x)
+
+    model = keras.Model(inputs, outputs)
+    model.compile(optimizer='adam', loss='mse')
+    return model
+
+
+def _ae_reconstruction_errors(model, X: np.ndarray) -> np.ndarray:
+    X = np.asarray(X)
+    preds = model.predict(X, verbose=0)
+    return np.mean((X - preds) ** 2, axis=1)
+
+
+def train_autoencoder(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    encoding_dim: int = 8,
+    epochs: int = 50,
+    batch_size: int = 512,
+    contamination: float = 0.01,
+    validation_split: float = 0.1,
+    patience: int = 5,
+    denoising: bool = False,
+    noise_factor: float = 0.05,
+):
+    """
+    Entrena AE o Denoising AE (solo normales). Denoising: GaussianNoise solo en fit.
+    Devuelve (model, history, threshold_mse). Umbral fino en val: calibrate_ae_threshold_on_val.
     """
     from tensorflow import keras
 
     X_arr = np.asarray(X_train)
     y_arr = np.asarray(y_train).ravel()
     if len(y_arr) != len(X_arr):
-        raise ValueError(
-            f"X_train ({len(X_arr)}) e y_train ({len(y_arr)}) deben tener la misma longitud."
-        )
-    X_train_normal = X_arr[y_arr == 0]
-    if X_train_normal.shape[0] == 0:
+        raise ValueError("X_train e y_train deben tener la misma longitud.")
+    X_normal = X_arr[y_arr == 0]
+    if X_normal.shape[0] == 0:
         raise ValueError("No hay transacciones normales para entrenar el Autoencoder.")
 
-    input_dim = X_train_normal.shape[1]
-    model = build_autoencoder(input_dim, encoding_dim)
+    input_dim = X_normal.shape[1]
+    if denoising:
+        model = build_denoising_autoencoder(input_dim, encoding_dim, noise_factor)
+    else:
+        model = build_autoencoder(input_dim, encoding_dim)
 
     early_stopping = keras.callbacks.EarlyStopping(
         monitor='val_loss',
         patience=patience,
         restore_best_weights=True,
-        verbose=1,
+        verbose=0,
     )
 
     history = model.fit(
-        X_train_normal, X_train_normal,
+        X_normal, X_normal,
         epochs=epochs,
         batch_size=batch_size,
         validation_split=validation_split,
@@ -161,29 +265,56 @@ def train_autoencoder(X_train: np.ndarray, y_train: np.ndarray,
         verbose=0,
     )
 
-    # Umbral basado en el error de reconstrucción sobre transacciones normales
-    train_preds = model.predict(X_train_normal, verbose=0)
-    train_errors = np.mean((X_train_normal - train_preds) ** 2, axis=1)
+    train_errors = _ae_reconstruction_errors(model, X_normal)
     threshold = float(np.percentile(train_errors, 100 * (1 - contamination)))
-
     return model, history, threshold
 
 
-def predict_autoencoder(model, X: np.ndarray, threshold: float):
-    """
-    Devuelve (labels, scores) donde:
-    - labels: 1 = anómalo (MSE >= threshold), 0 = normal
-    - scores: error de reconstrucción normalizado en [0, 1] (mayor = más anómalo)
-    Mismo patrón que predict_isolation_forest y predict_lof.
-    """
-    X = np.asarray(X)
-    preds = model.predict(X, verbose=0)
-    raw_errors = np.mean((X - preds) ** 2, axis=1)
+def threshold_from_errors(errors: np.ndarray, contamination: float) -> float:
+    """Umbral MSE crudo por percentil de contaminación."""
+    return float(np.percentile(errors, 100 * (1 - contamination)))
 
-    scores = (raw_errors - raw_errors.min()) / (raw_errors.max() - raw_errors.min())
+
+def calibrate_ae_threshold_on_val(
+    model, X_val: np.ndarray, y_val: np.ndarray, contamination: float = None
+) -> float:
+    """
+    Calibra umbral MSE en validation: percentil fijo o F1 óptimo sobre errores crudos.
+    Si contamination se pasa, usa ese percentil; si no, maximiza F1 en val.
+    """
+    errors = _ae_reconstruction_errors(model, X_val)
+    if contamination is not None:
+        return threshold_from_errors(errors[y_val == 0], contamination)
+
+    from src.evaluation import find_optimal_threshold
+    scores, _, _ = normalize_scores(errors)
+    thresh_norm, _ = find_optimal_threshold(y_val, scores)
+    # Convertir umbral normalizado a MSE crudo
+    e_min, e_max = errors.min(), errors.max()
+    return float(e_min + thresh_norm * (e_max - e_min))
+
+
+def predict_autoencoder(
+    model,
+    X: np.ndarray,
+    threshold: float,
+    ref_min: float = None,
+    ref_max: float = None,
+):
+    """
+    Devuelve (labels, scores). labels usan threshold en MSE crudo; scores normalizados.
+    """
+    raw_errors = _ae_reconstruction_errors(model, X)
+    scores, _, _ = normalize_scores(raw_errors, ref_min, ref_max)
     labels = (raw_errors >= threshold).astype(int)
-
     return labels, scores
+
+
+def predict_autoencoder_with_refs(model, X, threshold, ref_min=None, ref_max=None):
+    raw_errors = _ae_reconstruction_errors(model, X)
+    scores, ref_min, ref_max = normalize_scores(raw_errors, ref_min, ref_max)
+    labels = (raw_errors >= threshold).astype(int)
+    return labels, scores, ref_min, ref_max
 
 
 # ---------------------------------------------------------------------------
@@ -191,29 +322,30 @@ def predict_autoencoder(model, X: np.ndarray, threshold: float):
 # ---------------------------------------------------------------------------
 
 def save_isolation_forest(model: IsolationForest, path: str = "models/isolation_forest.pkl"):
-    """Guarda el modelo Isolation Forest con joblib."""
     joblib.dump(model, path)
     print(f"Modelo guardado en {path}")
 
 
 def load_isolation_forest(path: str = "models/isolation_forest.pkl") -> IsolationForest:
-    """Carga el modelo Isolation Forest desde disco."""
     return joblib.load(path)
 
 
-def save_autoencoder(model, threshold: float,
-                     model_path: str = "models/autoencoder.keras",
-                     threshold_path: str = "models/ae_threshold.pkl"):
-    """Guarda el Autoencoder (formato Keras nativo) y el threshold (joblib)."""
+def save_autoencoder(
+    model,
+    threshold: float,
+    model_path: str = "models/autoencoder.keras",
+    threshold_path: str = "models/ae_threshold.pkl",
+):
     model.save(model_path)
     joblib.dump(threshold, threshold_path)
     print(f"Autoencoder guardado en {model_path}")
     print(f"Umbral guardado en {threshold_path}")
 
 
-def load_autoencoder(model_path: str = "models/autoencoder.keras",
-                     threshold_path: str = "models/ae_threshold.pkl"):
-    """Carga el Autoencoder y su threshold desde disco. Devuelve (model, threshold)."""
+def load_autoencoder(
+    model_path: str = "models/autoencoder.keras",
+    threshold_path: str = "models/ae_threshold.pkl",
+):
     from tensorflow import keras
     model = keras.models.load_model(model_path)
     threshold = joblib.load(threshold_path)

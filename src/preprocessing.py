@@ -29,7 +29,8 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
 def feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
     """
     Crea features derivadas y elimina las columnas originales de las que provienen.
-    - hora, dia_semana: extraídos de trans_date_trans_time
+    - hora, dia_semana, is_noche: extraídos de trans_date_trans_time
+    - log_amt: log1p del monto (reduce skew)
     - edad: días desde dob hasta 2021-01-01 dividido 365.25
     - distancia: Haversine en km entre titular y comercio
     - cat_*: one-hot encoding de category (14 columnas)
@@ -39,6 +40,8 @@ def feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
     dt = pd.to_datetime(df['trans_date_trans_time'])
     df['hora'] = dt.dt.hour
     df['dia_semana'] = dt.dt.dayofweek
+    df['is_noche'] = ((df['hora'] >= 22) | (df['hora'] <= 5)).astype(int)
+    df['log_amt'] = np.log1p(df['amt'].astype(float))
 
     ref = pd.Timestamp('2021-01-01')
     df['edad'] = ((ref - pd.to_datetime(df['dob'])).dt.days / 365.25).astype(int)
@@ -69,42 +72,93 @@ def scale_data(X_train: pd.DataFrame, X_test: pd.DataFrame, scaler: StandardScal
     if scaler is None:
         scaler = StandardScaler()
         X_train_scaled = pd.DataFrame(
-            scaler.fit_transform(X_train), columns=X_train.columns
+            scaler.fit_transform(X_train), columns=X_train.columns, index=X_train.index
         )
     else:
         X_train_scaled = pd.DataFrame(
-            scaler.transform(X_train), columns=X_train.columns
+            scaler.transform(X_train), columns=X_train.columns, index=X_train.index
         )
     X_test_scaled = pd.DataFrame(
-        scaler.transform(X_test), columns=X_test.columns
+        scaler.transform(X_test), columns=X_test.columns, index=X_test.index
     )
     return X_train_scaled, X_test_scaled, scaler
 
 
-def split_data(df: pd.DataFrame, test_size: float = 0.2, random_state: int = 42):
+def scale_splits(
+    X_train: pd.DataFrame,
+    X_val: pd.DataFrame,
+    X_test: pd.DataFrame,
+    scaler: StandardScaler = None,
+):
     """
-    Separa en train y test estratificado por is_fraud.
-    El modelo se entrena solo con transacciones normales (is_fraud == 0).
-    Las etiquetas de test se reservan para evaluación.
-    Devuelve (X_train, X_test, y_train, y_test, contamination_rate).
-    y_train queda alineado con X_train (solo normales).
-    contamination_rate es la tasa de fraude del split de train antes de filtrar.
+    Escala train, val y test. El scaler se ajusta exclusivamente sobre X_train.
+    Devuelve (X_train_sc, X_val_sc, X_test_sc, scaler).
     """
+    if scaler is None:
+        scaler = StandardScaler()
+        X_train_sc = pd.DataFrame(
+            scaler.fit_transform(X_train), columns=X_train.columns, index=X_train.index
+        )
+    else:
+        X_train_sc = pd.DataFrame(
+            scaler.transform(X_train), columns=X_train.columns, index=X_train.index
+        )
+    X_val_sc = pd.DataFrame(
+        scaler.transform(X_val), columns=X_val.columns, index=X_val.index
+    )
+    X_test_sc = pd.DataFrame(
+        scaler.transform(X_test), columns=X_test.columns, index=X_test.index
+    )
+    return X_train_sc, X_val_sc, X_test_sc, scaler
+
+
+
+
+
+def split_data_three_way(
+    df: pd.DataFrame,
+    val_size: float = 0.2,
+    test_size: float = 0.2,
+    random_state: int = 42,
+):
+    """
+    Split estratificado  train / val / test  (por defecto 60% / 20% / 20%).
+    Solo X_train se filtra a transacciones normales para entrenamiento no supervisado.
+    val y test conservan fraudes para calibrar umbrales y evaluar.
+
+    Devuelve:
+        X_train, X_val, X_test, y_train, y_val, y_test, contamination_rate
+    """
+    if val_size + test_size >= 1.0:
+        raise ValueError("val_size + test_size debe ser menor que 1.0")
+
     X = df.drop(columns=['is_fraud'])
     y = df['is_fraud']
-    X_train, X_test, y_train, y_test = train_test_split(
+
+    X_dev, X_test, y_dev, y_test = train_test_split(
         X, y, test_size=test_size, random_state=random_state, stratify=y
     )
+    val_ratio = val_size / (1.0 - test_size)
+    X_train, X_val, y_train, y_val = train_test_split(
+        X_dev, y_dev, test_size=val_ratio, random_state=random_state, stratify=y_dev
+    )
+
     contamination_rate = float(y_train.mean())
     normal_mask = y_train == 0
     X_train = X_train.loc[normal_mask].reset_index(drop=True)
     y_train = y_train.loc[normal_mask].reset_index(drop=True)
-    return X_train, X_test, y_train, y_test, contamination_rate
+
+    X_val = X_val.reset_index(drop=True)
+    y_val = y_val.reset_index(drop=True)
+    X_test = X_test.reset_index(drop=True)
+    y_test = y_test.reset_index(drop=True)
+
+    return X_train, X_val, X_test, y_train, y_val, y_test, contamination_rate
 
 
 def get_feature_columns() -> list:
     """Devuelve la lista de columnas que entran al modelo después del preprocesamiento."""
-    base = ['amt', 'city_pop', 'hora', 'dia_semana', 'edad', 'distancia']
+    base = ['amt', 'log_amt', 'city_pop', 'hora', 'dia_semana', 'is_noche', 'edad', 'distancia']
     cats = [
         'cat_entertainment', 'cat_food_dining', 'cat_gas_transport',
         'cat_grocery_net', 'cat_grocery_pos', 'cat_health_fitness',
