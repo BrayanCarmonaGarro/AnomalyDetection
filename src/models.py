@@ -6,6 +6,7 @@ Entrenamiento, predicción y serialización de Isolation Forest y Autoencoder.
 import numpy as np
 import joblib
 from sklearn.ensemble import IsolationForest
+from sklearn.neighbors import LocalOutlierFactor
 
 
 # ---------------------------------------------------------------------------
@@ -42,6 +43,52 @@ def predict_isolation_forest(model: IsolationForest, X: np.ndarray):
     labels = (sklearn_labels == -1).astype(int)
 
     return labels, scores
+
+
+# ---------------------------------------------------------------------------
+# Local Outlier Factor
+# ---------------------------------------------------------------------------
+
+def train_lof(X_train: np.ndarray, n_neighbors: int = 20, contamination: float = 0.01) -> LocalOutlierFactor:
+    """
+    Entrena un LOF con novelty=True sobre transacciones normales.
+    novelty=True es obligatorio para llamar predict() y decision_function() sobre datos nuevos.
+    """
+    model = LocalOutlierFactor(
+        n_neighbors=n_neighbors,
+        contamination=contamination,
+        novelty=True,
+        n_jobs=-1,
+    )
+    model.fit(X_train)
+    return model
+
+
+def predict_lof(model: LocalOutlierFactor, X: np.ndarray):
+    """
+    Devuelve (labels, scores) donde:
+    - labels: 1 = anómalo, 0 = normal
+    - scores: nivel de anomalía normalizado en [0, 1] (mayor = más anómalo)
+    """
+    raw_scores = model.decision_function(X)  # más negativo → más anómalo
+    scores = -raw_scores
+    scores = (scores - scores.min()) / (scores.max() - scores.min())
+
+    sklearn_labels = model.predict(X)  # -1 = anómalo, 1 = normal
+    labels = (sklearn_labels == -1).astype(int)
+
+    return labels, scores
+
+
+def save_lof(model: LocalOutlierFactor, path: str = "models/lof.pkl"):
+    """Guarda el modelo LOF con joblib."""
+    joblib.dump(model, path)
+    print(f"Modelo guardado en {path}")
+
+
+def load_lof(path: str = "models/lof.pkl") -> LocalOutlierFactor:
+    """Carga el modelo LOF desde disco."""
+    return joblib.load(path)
 
 
 # ---------------------------------------------------------------------------
