@@ -103,13 +103,14 @@ def build_autoencoder(input_dim: int, encoding_dim: int = 8):
     Devuelve el modelo Keras compilado con Adam y loss MSE.
     """
     from tensorflow import keras
-    from tensorflow.keras.layers import Dense
+    from tensorflow.keras.layers import Dense, Input
 
     model = keras.Sequential([
-        Dense(16, activation='relu', input_shape=(input_dim,)),  # encoder
-        Dense(encoding_dim, activation='relu'),                   # bottleneck
-        Dense(16, activation='relu'),                             # decoder
-        Dense(input_dim, activation='linear'),                    # reconstrucción
+        Input(shape=(input_dim,)),
+        Dense(16, activation='relu'),
+        Dense(encoding_dim, activation='relu'),
+        Dense(16, activation='relu'),
+        Dense(input_dim, activation='linear'),
     ])
     model.compile(optimizer='adam', loss='mse')
     return model
