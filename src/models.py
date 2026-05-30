@@ -131,8 +131,15 @@ def train_autoencoder(X_train: np.ndarray, y_train: np.ndarray,
     """
     from tensorflow import keras
 
-    # Filtrar solo transacciones normales para el entrenamiento no supervisado
-    X_train_normal = X_train[y_train == 0]
+    X_arr = np.asarray(X_train)
+    y_arr = np.asarray(y_train).ravel()
+    if len(y_arr) != len(X_arr):
+        raise ValueError(
+            f"X_train ({len(X_arr)}) e y_train ({len(y_arr)}) deben tener la misma longitud."
+        )
+    X_train_normal = X_arr[y_arr == 0]
+    if X_train_normal.shape[0] == 0:
+        raise ValueError("No hay transacciones normales para entrenar el Autoencoder.")
 
     input_dim = X_train_normal.shape[1]
     model = build_autoencoder(input_dim, encoding_dim)
@@ -168,6 +175,7 @@ def predict_autoencoder(model, X: np.ndarray, threshold: float):
     - scores: error de reconstrucción normalizado en [0, 1] (mayor = más anómalo)
     Mismo patrón que predict_isolation_forest y predict_lof.
     """
+    X = np.asarray(X)
     preds = model.predict(X, verbose=0)
     raw_errors = np.mean((X - preds) ** 2, axis=1)
 
