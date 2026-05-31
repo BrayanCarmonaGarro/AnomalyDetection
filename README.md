@@ -47,34 +47,46 @@ Candidatos evaluados:
 
 ## Setup
 
-### 1. Create and activate the virtual environment
+### Requisitos de Python
 
-The virtual environment is **not** tracked by git, so each person must create it locally.
+- **Requerido:** Python **3.12.x**
+- **Evitar:** Python 3.13 o superior con el `requirements.txt` actual porque no hay compatibilidad con tensorflow
+- **Descarga:** [python.org/downloads](https://www.python.org/downloads/) — en Windows, marcar *Add python.exe to PATH*
+- **Comprobar** antes de crear el entorno virtual:
 
-**Create:**
 ```bash
-python -m venv .venv
+python --version
 ```
 
-**Activate:**
-- Windows:
-  ```bash
-  .venv\Scripts\activate
-  ```
-- macOS / Linux:
-  ```bash
-  source .venv/bin/activate
-  ```
+### 1. Crear y activar el entorno virtual
 
-### 2. Install dependencies
+El directorio `.venv` **no** está en git; cada persona lo crea en local **con Python 3.12**.
 
-With the virtual environment activated, run:
+**Windows** (usa el launcher `py` para no tomar por error una versión más nueva del PATH):
+
+```powershell
+py -3.12 -m venv .venv
+.venv\Scripts\activate
+python --version
+```
+
+**macOS / Linux:**
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python --version
+```
+
+### 2. Instalar dependencias
+
+Con el entorno virtual activado:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Start JupyterLab
+### 3. Iniciar JupyterLab
 
 ```bash
 jupyter lab
