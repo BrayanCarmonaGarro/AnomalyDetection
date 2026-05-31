@@ -29,22 +29,22 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
 def feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
     """
     Crea features derivadas y elimina las columnas originales de las que provienen.
-    - hora, dia_semana, is_noche: extraídos de trans_date_trans_time
+    - hour, day_of_week, is_night: extraídos de trans_date_trans_time
     - log_amt: log1p del monto (reduce skew)
-    - edad: días desde dob hasta 2021-01-01 dividido 365.25
-    - distancia: Haversine en km entre titular y comercio
+    - age: días desde dob hasta 2021-01-01 dividido 365.25
+    - distance: Haversine en km entre titular y comercio
     - cat_*: one-hot encoding de category (14 columnas)
     """
     df = df.copy()
 
     dt = pd.to_datetime(df['trans_date_trans_time'])
-    df['hora'] = dt.dt.hour
-    df['dia_semana'] = dt.dt.dayofweek
-    df['is_noche'] = ((df['hora'] >= 22) | (df['hora'] <= 5)).astype(int)
+    df['hour'] = dt.dt.hour
+    df['day_of_week'] = dt.dt.dayofweek
+    df['is_night'] = ((df['hour'] >= 22) | (df['hour'] <= 5)).astype(int)
     df['log_amt'] = np.log1p(df['amt'].astype(float))
 
     ref = pd.Timestamp('2021-01-01')
-    df['edad'] = ((ref - pd.to_datetime(df['dob'])).dt.days / 365.25).astype(int)
+    df['age'] = ((ref - pd.to_datetime(df['dob'])).dt.days / 365.25).astype(int)
 
     lat1 = np.radians(df['lat'].values)
     lon1 = np.radians(df['long'].values)
@@ -52,7 +52,7 @@ def feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
     lon2 = np.radians(df['merch_long'].values)
     dlat, dlon = lat2 - lat1, lon2 - lon1
     a = np.sin(dlat / 2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2)**2
-    df['distancia'] = 6371 * 2 * np.arcsin(np.sqrt(a))
+    df['distance'] = 6371 * 2 * np.arcsin(np.sqrt(a))
 
     dummies = pd.get_dummies(df['category'], prefix='cat').astype(int)
     df = df.drop(columns=['trans_date_trans_time', 'dob', 'lat', 'long',
@@ -158,7 +158,7 @@ def split_data_three_way(
 
 def get_feature_columns() -> list:
     """Devuelve la lista de columnas que entran al modelo después del preprocesamiento."""
-    base = ['amt', 'log_amt', 'city_pop', 'hora', 'dia_semana', 'is_noche', 'edad', 'distancia']
+    base = ['amt', 'log_amt', 'city_pop', 'hour', 'day_of_week', 'is_night', 'age', 'distance']
     cats = [
         'cat_entertainment', 'cat_food_dining', 'cat_gas_transport',
         'cat_grocery_net', 'cat_grocery_pos', 'cat_health_fitness',
@@ -177,9 +177,9 @@ def describe_dataset(df: pd.DataFrame) -> None:
     print(f"\nTipos de datos:")
     print(df.dtypes)
     print(f"\nValores nulos:")
-    nulos = df.isnull().sum()
-    nulos = nulos[nulos > 0]
-    print(nulos if not nulos.empty else "Ninguno")
+    null_counts = df.isnull().sum()
+    null_counts = null_counts[null_counts > 0]
+    print(null_counts if not null_counts.empty else "Ninguno")
     print(f"\nPrimeras filas:")
     display(df.head())
     print(f"\nResumen estadístico (variables numéricas):")

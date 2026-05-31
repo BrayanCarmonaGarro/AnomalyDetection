@@ -34,7 +34,7 @@ def get_metrics(
     pr_auc = average_precision_score(y_true, scores)
 
     metrics = {
-        "modelo": model_name,
+        "model": model_name,
         "accuracy": round(float(accuracy), 4),
         "precision": round(float(precision), 4),
         "recall": round(float(recall), 4),
@@ -213,7 +213,7 @@ def compare_models(results: dict, title: str = "Comparativa de Modelos"):
     """
     import pandas as pd
 
-    df = pd.DataFrame(results.values()).set_index("modelo")
+    df = pd.DataFrame(results.values()).set_index("model")
     print(f"\n{title}:")
     print(df.to_string())
 
