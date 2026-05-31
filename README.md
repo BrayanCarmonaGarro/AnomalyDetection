@@ -1,5 +1,5 @@
 # AnomalyDetection
-Detección de anomalías en transacciones monetarias mediante Isolation Forest y Autoencoder (red neuronal). Proyecto Final — Inteligencia Artificial, UNA 2026.
+Detección de anomalías en transacciones monetarias. Proyecto Final - Inteligencia Artificial, UNA 2026.
 
 ## Estructura del Proyecto
 
@@ -7,11 +7,13 @@ Detección de anomalías en transacciones monetarias mediante Isolation Forest y
 AnomalyDetection/
 ├── proyecto.ipynb          # Notebook principal: narrativa, decisiones, resultados (entregable)
 ├── src/
-│   ├── preprocessing.py    # Limpieza, feature engineering, normalización y split del dataset
-│   ├── models.py           # Implementación de Isolation Forest y Autoencoder; serialización
-│   └── evaluation.py       # Métricas, matrices de confusión, curvas ROC y comparativa
-├── app.py                  # Sistema interactivo en Streamlit: ingreso de datos → predicción
-├── models/                 # Modelos entrenados serializados (.pkl para IF, .keras para AE)
+│   ├── preprocessing.py    # Limpieza, feature engineering, escalado y split train/val/test
+│   ├── eda.py              # Gráficos y utilidades del análisis exploratorio
+│   ├── models.py           # Candidatos ML y NL; entrenamiento, predicción y serialización
+│   ├── evaluation.py       # Métricas, curvas ROC/PR, comparativa entre modelos
+│   └── tuning.py           # Búsqueda de hiperparámetros y selección de ganadores
+├── app.py                  # Streamlit
+├── models/                 # Modelos serializados (.pkl, .keras)
 ├── data.csv                # Dataset de transacciones (no versionado en git)
 ├── requirements.txt
 └── README.md
@@ -20,8 +22,8 @@ AnomalyDetection/
 ### Cómo fluye el proyecto
 
 1. `proyecto.ipynb` importa funciones de `src/` para mantener el notebook limpio y narrativo.
-2. Al finalizar el entrenamiento, los modelos se serializan en `models/`.
-3. `app.py` carga los modelos de `models/` sin re-ejecutar el notebook y expone la interfaz Streamlit.
+2. Umbrales se calibran en validation; métricas finales y ganador se reportan en test.
+3. Opcionalmente, los modelos pueden serializarse en `models/`; `app.py` los cargaría sin re-ejecutar el notebook.
 
 ## Dataset
 
@@ -35,49 +37,56 @@ Dataset sintético de transacciones con tarjeta de crédito, generado con la her
 
 ## Modelos
 
-### Isolation Forest
-Modelo no supervisado diseñado específicamente para detección de anomalías. Construye árboles de decisión aleatorios y mide qué tan fácil es "aislar" un registro del resto: los registros anómalos son más fáciles de aislar y por lo tanto reciben un mayor puntaje de anomalía. Se entrena únicamente con transacciones normales, lo que lo hace robusto ante el fuerte desbalance del dataset (>99% transacciones legítimas). Ideal para detectar fraudes con patrones nuevos o desconocidos.
+Candidatos evaluados:
 
-### Autoencoder (Red Neuronal)
-Red neuronal que aprende a comprimir y reconstruir transacciones normales. Cuando se le presenta una transacción anómala, el error de reconstrucción es alto porque el modelo no fue entrenado para representar ese tipo de patrón. Ese error de reconstrucción se usa directamente como el nivel de anomalía. Captura relaciones no lineales complejas entre las variables, lo que lo hace complementario al Isolation Forest.
-
-### Por qué detección de anomalías y no clasificación binaria
-Aunque el dataset tiene etiquetas (`is_fraud`), se optó por un enfoque de detección de anomalías por dos razones principales:
-- El fraude evoluciona constantemente, por lo que un clasificador entrenado con ejemplos históricos de fraude puede fallar ante patrones nuevos.
-- El desbalance extremo del dataset perjudica a los clasificadores supervisados. Los modelos de anomalías aprenden solo el comportamiento normal y detectan cualquier desviación, sin depender de ejemplos de fraude.
-
-Las etiquetas se usan únicamente para **evaluar** el desempeño de los modelos, no para entrenarlos.
+- **Isolation Forest** — aislamiento en árboles aleatorios.
+- **LOF** — anomalías por densidad local.
+- **One-Class SVM** — frontera de decisión en espacio de features.
+- **Autoencoder** — error de reconstrucción sobre comportamiento normal.
+- **Denoising Autoencoder** — AE con ruido gaussiano en entrenamiento.
 
 ## Setup
 
-### 1. Create and activate the virtual environment
+### Requisitos de Python
 
-The virtual environment is **not** tracked by git, so each person must create it locally.
+- **Requerido:** Python **3.12.x**
+- **Evitar:** Python 3.13 o superior con el `requirements.txt` actual porque no hay compatibilidad con tensorflow
+- **Descarga:** [python.org/downloads](https://www.python.org/downloads/) — en Windows, marcar *Add python.exe to PATH*
+- **Comprobar** antes de crear el entorno virtual:
 
-**Create:**
 ```bash
-python -m venv .venv
+python --version
 ```
 
-**Activate:**
-- Windows:
-  ```bash
-  .venv\Scripts\activate
-  ```
-- macOS / Linux:
-  ```bash
-  source .venv/bin/activate
-  ```
+### 1. Crear y activar el entorno virtual
 
-### 2. Install dependencies
+El directorio `.venv` **no** está en git; cada persona lo crea en local **con Python 3.12**.
 
-With the virtual environment activated, run:
+**Windows** (usa el launcher `py` para no tomar por error una versión más nueva del PATH):
+
+```powershell
+py -3.12 -m venv .venv
+.venv\Scripts\activate
+python --version
+```
+
+**macOS / Linux:**
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python --version
+```
+
+### 2. Instalar dependencias
+
+Con el entorno virtual activado:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Start JupyterLab
+### 3. Iniciar JupyterLab
 
 ```bash
 jupyter lab

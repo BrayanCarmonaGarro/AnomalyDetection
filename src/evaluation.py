@@ -6,18 +6,24 @@ Cálculo de métricas, visualizaciones y comparativa entre modelos.
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import (
-    classification_report,
     confusion_matrix,
     roc_auc_score,
     roc_curve,
     ConfusionMatrixDisplay,
     precision_recall_fscore_support,
+    average_precision_score,
 )
 
 
-def get_metrics(y_true: np.ndarray, y_pred: np.ndarray, scores: np.ndarray, model_name: str = "") -> dict:
+def get_metrics(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    scores: np.ndarray,
+    model_name: str = "",
+    verbose: bool = True,
+) -> dict:
     """
-    Calcula accuracy, precision, recall, F1 y AUC-ROC.
+    Calcula accuracy, precision, recall, F1, AUC-ROC y PR-AUC.
     Devuelve un diccionario con todas las métricas listo para comparar modelos.
     """
     precision, recall, f1, _ = precision_recall_fscore_support(
@@ -25,25 +31,29 @@ def get_metrics(y_true: np.ndarray, y_pred: np.ndarray, scores: np.ndarray, mode
     )
     accuracy = (y_true == y_pred).mean()
     auc = roc_auc_score(y_true, scores)
+    pr_auc = average_precision_score(y_true, scores)
 
     metrics = {
-        "modelo": model_name,
-        "accuracy": round(accuracy, 4),
-        "precision": round(precision, 4),
-        "recall": round(recall, 4),
-        "f1": round(f1, 4),
-        "auc_roc": round(auc, 4),
+        "model": model_name,
+        "accuracy": round(float(accuracy), 4),
+        "precision": round(float(precision), 4),
+        "recall": round(float(recall), 4),
+        "f1": round(float(f1), 4),
+        "auc_roc": round(float(auc), 4),
+        "pr_auc": round(float(pr_auc), 4),
     }
 
-    print(f"\n{'='*50}")
-    print(f"  {model_name}")
-    print(f"{'='*50}")
-    print(f"  Accuracy : {metrics['accuracy']:.4f}")
-    print(f"  Precision: {metrics['precision']:.4f}")
-    print(f"  Recall   : {metrics['recall']:.4f}")
-    print(f"  F1       : {metrics['f1']:.4f}")
-    print(f"  AUC-ROC  : {metrics['auc_roc']:.4f}")
-    print(f"{'='*50}\n")
+    if verbose:
+        print(f"\n{'='*50}")
+        print(f"  {model_name}")
+        print(f"{'='*50}")
+        print(f"  Accuracy : {metrics['accuracy']:.4f}")
+        print(f"  Precision: {metrics['precision']:.4f}")
+        print(f"  Recall   : {metrics['recall']:.4f}")
+        print(f"  F1       : {metrics['f1']:.4f}")
+        print(f"  AUC-ROC  : {metrics['auc_roc']:.4f}")
+        print(f"  PR-AUC   : {metrics['pr_auc']:.4f}")
+        print(f"{'='*50}\n")
 
     return metrics
 
@@ -97,33 +107,79 @@ def find_optimal_threshold(y_true: np.ndarray, scores: np.ndarray):
     """
     Escanea todos los umbrales posibles del score y devuelve el que maximiza F1.
     Retorna (threshold_optimo, labels_con_threshold_optimo).
+    Usar sobre el conjunto de validación, no sobre test.
     """
     from sklearn.metrics import precision_recall_curve
+
     precision, recall, thresholds = precision_recall_curve(y_true, scores)
-    # precision_recall_curve devuelve len(thresholds) == len(precision) - 1
     f1 = 2 * precision[:-1] * recall[:-1] / (precision[:-1] + recall[:-1] + 1e-10)
     best_idx = np.argmax(f1)
     best_threshold = thresholds[best_idx]
     best_labels = (scores >= best_threshold).astype(int)
-    return best_threshold, best_labels
+    return float(best_threshold), best_labels
 
 
-def plot_precision_recall_curve(y_true: np.ndarray, scores: np.ndarray, threshold: float = None, model_name: str = ""):
+def apply_threshold(scores: np.ndarray, threshold: float) -> np.ndarray:
+    """Etiquetas binarias a partir de scores y umbral calibrado."""
+    return (np.asarray(scores) >= threshold).astype(int)
+
+
+def calibrate_and_evaluate(
+    y_val: np.ndarray,
+    scores_val: np.ndarray,
+    y_test: np.ndarray,
+    scores_test: np.ndarray,
+    model_name: str,
+    verbose: bool = True,
+) -> tuple[float, dict, dict]:
     """
-    Grafica la curva Precision-Recall.
-    Si se pasa threshold, marca el punto óptimo sobre la curva.
+    Calibra umbral óptimo por F1 en val y reporta métricas en val y test.
+    Devuelve (threshold, metrics_val, metrics_test).
     """
-    from sklearn.metrics import precision_recall_curve, average_precision_score
+    threshold, y_val_pred = find_optimal_threshold(y_val, scores_val)
+    metrics_val = get_metrics(
+        y_val, y_val_pred, scores_val, model_name=f"{model_name} (val, umbral val)", verbose=verbose
+    )
+    y_test_pred = apply_threshold(scores_test, threshold)
+    metrics_test = get_metrics(
+        y_test, y_test_pred, scores_test, model_name=f"{model_name} (test, umbral val)", verbose=verbose
+    )
+    return threshold, metrics_val, metrics_test
+
+
+def plot_learning_curve(history, model_name: str = ""):
+    """
+    Grafica la evolución del loss (MSE) de entrenamiento y validación época a época.
+    Recibe el objeto History devuelto por model.fit().
+    """
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.plot(history.history['loss'], color="#2563EB", lw=2, label='Entrenamiento')
+    ax.plot(history.history['val_loss'], color="#EF4444", lw=2, label='Validación')
+    ax.set_xlabel("Época", fontsize=11)
+    ax.set_ylabel("Loss (MSE)", fontsize=11)
+    ax.set_title(f"Curva de Aprendizaje — {model_name}", fontsize=13)
+    ax.legend(fontsize=11)
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_precision_recall_curve(
+    y_true: np.ndarray, scores: np.ndarray, threshold: float = None, model_name: str = ""
+):
+    """Grafica la curva Precision-Recall."""
+    from sklearn.metrics import precision_recall_curve
+
     precision, recall, thresholds = precision_recall_curve(y_true, scores)
     ap = average_precision_score(y_true, scores)
 
     fig, ax = plt.subplots(figsize=(7, 5))
-    ax.plot(recall, precision, color="#2563EB", lw=2, label=f"AP = {ap:.4f}")
+    ax.plot(recall, precision, color="#2563EB", lw=2, label=f"PR-AUC = {ap:.4f}")
 
-    if threshold is not None:
+    if threshold is not None and len(thresholds) > 0:
         idx = np.argmin(np.abs(thresholds - threshold))
         ax.scatter(recall[idx], precision[idx], color="#EF4444", zorder=5, s=100,
-                   label=f"Umbral óptimo ({threshold:.3f})")
+                   label=f"Umbral val ({threshold:.3f})")
 
     baseline = y_true.mean()
     ax.axhline(baseline, color="gray", linestyle="--", lw=1,
@@ -138,28 +194,40 @@ def plot_precision_recall_curve(y_true: np.ndarray, scores: np.ndarray, threshol
     plt.show()
 
 
-def compare_models(results: dict):
+def ensemble_scores(score_dict: dict, method: str = "mean") -> np.ndarray:
+    """
+    Combina scores normalizados de varios modelos.
+    method: 'mean' | 'max'
+    """
+    stacked = np.column_stack([np.asarray(v) for v in score_dict.values()])
+    if method == "max":
+        return stacked.max(axis=1)
+    return stacked.mean(axis=1)
+
+
+def compare_models(results: dict, title: str = "Comparativa de Modelos"):
     """
     Recibe un dict {nombre_modelo: metricas_dict} y genera:
     - Tabla comparativa de métricas
-    - Gráfico de barras comparando F1 y AUC-ROC
+    - Gráfico de barras comparando precision, recall, F1, AUC-ROC y PR-AUC
     """
     import pandas as pd
 
-    df = pd.DataFrame(results.values()).set_index("modelo")
-    print("\nComparativa de modelos:")
+    df = pd.DataFrame(results.values()).set_index("model")
+    print(f"\n{title}:")
     print(df.to_string())
 
-    metrics_to_plot = ["precision", "recall", "f1", "auc_roc"]
+    metrics_to_plot = ["precision", "recall", "f1", "auc_roc", "pr_auc"]
     x = np.arange(len(metrics_to_plot))
-    width = 0.35
-    colors = ["#2563EB", "#16A34A", "#DC2626", "#D97706"]
+    n = len(results)
+    width = min(0.8 / max(n, 1), 0.25)
+    colors = ["#2563EB", "#16A34A", "#DC2626", "#D97706", "#7C3AED", "#0891B2"]
 
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(10, 5))
     names = list(results.keys())
     for i, name in enumerate(names):
-        vals = [results[name][m] for m in metrics_to_plot]
-        offset = (i - len(names) / 2 + 0.5) * width
+        vals = [results[name].get(m, 0) for m in metrics_to_plot]
+        offset = (i - n / 2 + 0.5) * width
         bars = ax.bar(x + offset, vals, width, label=name, color=colors[i % len(colors)], alpha=0.85)
         for bar in bars:
             ax.text(
@@ -168,15 +236,32 @@ def compare_models(results: dict):
                 f"{bar.get_height():.3f}",
                 ha="center",
                 va="bottom",
-                fontsize=8,
+                fontsize=7,
             )
 
     ax.set_xticks(x)
-    ax.set_xticklabels(["Precision", "Recall", "F1", "AUC-ROC"], fontsize=11)
+    ax.set_xticklabels(["Precision", "Recall", "F1", "AUC-ROC", "PR-AUC"], fontsize=10)
     ax.set_ylim(0, 1.1)
     ax.set_ylabel("Valor", fontsize=11)
-    ax.set_title("Comparativa de Modelos", fontsize=13)
-    ax.legend(fontsize=10)
+    ax.set_title(title, fontsize=13)
+    ax.legend(fontsize=9, loc="upper right")
     ax.grid(True, axis="y", alpha=0.3)
     plt.tight_layout()
     plt.show()
+
+    return df
+
+
+def pick_winner(results: dict, primary: str = "f1", secondary: str = "pr_auc") -> str:
+    """Elige el modelo ganador por métrica primaria y desempate."""
+    best_name = None
+    best_primary = -1.0
+    best_secondary = -1.0
+    for name, m in results.items():
+        p = m.get(primary, 0)
+        s = m.get(secondary, 0)
+        if p > best_primary or (p == best_primary and s > best_secondary):
+            best_primary = p
+            best_secondary = s
+            best_name = name
+    return best_name
