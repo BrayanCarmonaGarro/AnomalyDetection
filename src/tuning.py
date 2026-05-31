@@ -170,7 +170,7 @@ def evaluate_ensemble(
     return _eval_ml_candidate(name, y_val, s_val, y_test, s_test, s_val.min(), s_val.max())
 
 
-_METRIC_KEYS = ("modelo", "accuracy", "precision", "recall", "f1", "auc_roc", "pr_auc")
+_METRIC_KEYS = ("model", "accuracy", "precision", "recall", "f1", "auc_roc", "pr_auc")
 
 
 def _metrics_table(results: dict) -> dict:
@@ -217,13 +217,13 @@ def run_comparative_section(
         ml_results, ml_cfg = tune_ml_models(X_tr, X_va, X_te, y_va, y_te, contamination_rate)
         ml_winner = ml_cfg["ml_winner"]
         print(f"Ganador ML: {ml_winner}")
+        state["ml_results"] = ml_results
+        state["ml_cfg"] = ml_cfg
+        state["ml_winner"] = ml_winner
         compare_models(
             _metrics_table(ml_results),
             title="Candidatos ML — test con umbral calibrado en val",
         )
-        state["ml_results"] = ml_results
-        state["ml_cfg"] = ml_cfg
-        state["ml_winner"] = ml_winner
 
     if stage in ("nl", "all"):
         print("=== Tuning candidatos NL ===")
@@ -232,13 +232,13 @@ def run_comparative_section(
         )
         nl_winner = nl_cfg["nl_winner"]
         print(f"Ganador NL: {nl_winner}")
+        state["nl_results"] = nl_results
+        state["nl_cfg"] = nl_cfg
+        state["nl_winner"] = nl_winner
         compare_models(
             _metrics_table(nl_results),
             title="Candidatos NL — test con umbral calibrado en val",
         )
-        state["nl_results"] = nl_results
-        state["nl_cfg"] = nl_cfg
-        state["nl_winner"] = nl_winner
 
     if stage in ("final", "all"):
         ml_cfg = state.get("ml_cfg")
@@ -283,11 +283,11 @@ def run_comparative_section(
             },
             "Ensemble IF+LOF": ens_metrics,
         }
+        state["ens_metrics"] = ens_metrics
+        state["section8_winners"] = section8_winners
         compare_models(
             section8_winners,
             title="Ganadores ML vs NL vs Ensemble (test, umbral val)",
         )
-        state["ens_metrics"] = ens_metrics
-        state["section8_winners"] = section8_winners
 
     return state
