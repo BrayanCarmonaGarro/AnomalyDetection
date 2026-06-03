@@ -7,7 +7,6 @@ import numpy as np
 import joblib
 from sklearn.ensemble import IsolationForest
 from sklearn.neighbors import LocalOutlierFactor
-from sklearn.svm import OneClassSVM
 
 
 # ---------------------------------------------------------------------------
@@ -125,48 +124,7 @@ def load_lof(path: str = "models/lof.pkl") -> LocalOutlierFactor:
 
 
 # ---------------------------------------------------------------------------
-# One-Class SVM
-# ---------------------------------------------------------------------------
-
-def train_one_class_svm(
-    X_train: np.ndarray, nu: float = 0.0052, gamma: str = "scale"
-) -> OneClassSVM:
-    """Entrena One-Class SVM sobre transacciones normales."""
-    model = OneClassSVM(kernel="rbf", nu=nu, gamma=gamma)
-    model.fit(X_train)
-    return model
-
-
-def predict_one_class_svm(
-    model: OneClassSVM, X: np.ndarray, ref_min: float = None, ref_max: float = None
-):
-    """Devuelve (labels, scores)."""
-    raw_scores = -model.decision_function(X)
-    scores, _, _ = normalize_scores(raw_scores, ref_min, ref_max)
-    labels = (model.predict(X) == -1).astype(int)
-    return labels, scores
-
-
-def predict_one_class_svm_with_refs(
-    model: OneClassSVM, X: np.ndarray, ref_min: float = None, ref_max: float = None
-):
-    raw_scores = -model.decision_function(X)
-    scores, ref_min, ref_max = normalize_scores(raw_scores, ref_min, ref_max)
-    labels = (model.predict(X) == -1).astype(int)
-    return labels, scores, ref_min, ref_max
-
-
-def save_one_class_svm(model: OneClassSVM, path: str = "models/ocsvm.pkl"):
-    joblib.dump(model, path)
-    print(f"Modelo guardado en {path}")
-
-
-def load_one_class_svm(path: str = "models/ocsvm.pkl") -> OneClassSVM:
-    return joblib.load(path)
-
-
-# ---------------------------------------------------------------------------
-# Autoencoder (vanilla y denoising)
+# Autoencoder
 # ---------------------------------------------------------------------------
 
 def build_autoencoder(input_dim: int, encoding_dim: int = 8):
@@ -181,32 +139,6 @@ def build_autoencoder(input_dim: int, encoding_dim: int = 8):
         Dense(16, activation='relu'),
         Dense(input_dim, activation='linear'),
     ])
-    model.compile(optimizer='adam', loss='mse')
-    return model
-
-
-def build_denoising_autoencoder(
-    input_dim: int, encoding_dim: int = 4, noise_factor: float = 0.05
-):
-    """
-    Denoising Autoencoder: GaussianNoise en entrenamiento (inactivo en inferencia),
-    cuello de botella agresivo y Dropout como regularización extra.
-
-    Arquitectura: input → GaussianNoise → 16 → encoding_dim → 16 → output
-    """
-    from tensorflow import keras
-    from tensorflow.keras.layers import Dense, Input, Dropout, GaussianNoise
-
-    inputs = Input(shape=(input_dim,))
-    x = GaussianNoise(noise_factor)(inputs)
-    x = Dense(16, activation='relu')(x)
-    x = Dropout(0.2)(x)
-    encoded = Dense(encoding_dim, activation='relu')(x)
-    x = Dense(16, activation='relu')(encoded)
-    x = Dropout(0.2)(x)
-    outputs = Dense(input_dim, activation='linear')(x)
-
-    model = keras.Model(inputs, outputs)
     model.compile(optimizer='adam', loss='mse')
     return model
 
@@ -226,11 +158,9 @@ def train_autoencoder(
     contamination: float = 0.01,
     validation_split: float = 0.1,
     patience: int = 5,
-    denoising: bool = False,
-    noise_factor: float = 0.05,
 ):
     """
-    Entrena AE o Denoising AE (solo normales). Denoising: GaussianNoise solo en fit.
+    Entrena autoencoder solo con transacciones normales.
     Devuelve (model, history, threshold_mse). Umbral fino en val: calibrate_ae_threshold_on_val.
     """
     from tensorflow import keras
@@ -244,10 +174,7 @@ def train_autoencoder(
         raise ValueError("No hay transacciones normales para entrenar el Autoencoder.")
 
     input_dim = X_normal.shape[1]
-    if denoising:
-        model = build_denoising_autoencoder(input_dim, encoding_dim, noise_factor)
-    else:
-        model = build_autoencoder(input_dim, encoding_dim)
+    model = build_autoencoder(input_dim, encoding_dim)
 
     early_stopping = keras.callbacks.EarlyStopping(
         monitor='val_loss',

@@ -7,6 +7,19 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
+from IPython.display import display
+
+
+_STAT_FORMAT = {
+    'count': '{:,.0f}',
+    'mean': '{:,.2f}',
+    'std': '{:,.2f}',
+    'min': '{:,.2f}',
+    '25%': '{:,.2f}',
+    '50%': '{:,.2f}',
+    '75%': '{:,.2f}',
+    'max': '{:,.2f}',
+}
 
 
 def load_data(path: str) -> pd.DataFrame:
@@ -183,4 +196,9 @@ def describe_dataset(df: pd.DataFrame) -> None:
     print(f"\nPrimeras filas:")
     display(df.head())
     print(f"\nResumen estadístico (variables numéricas):")
-    display(df.describe().T)
+    stats = df.describe().T
+    display(
+        stats.style
+        .format(_STAT_FORMAT, na_rep='—')
+        .set_table_styles([{'selector': 'td, th', 'props': 'white-space: nowrap;'}])
+    )
