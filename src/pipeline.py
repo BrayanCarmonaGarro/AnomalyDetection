@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
+import pandas as pd
 
 from src.models import (
     train_isolation_forest,
@@ -28,6 +29,7 @@ from src.evaluation import (
     apply_threshold,
     get_metrics,
     plot_precision_recall_curve,
+    compare_models,
 )
 
 
@@ -112,7 +114,6 @@ def run_autoencoder_vanilla(
         epochs=epochs,
         batch_size=batch_size,
         contamination=contamination_rate,
-        denoising=False,
     )
 
     epochs_run = len(history.history["loss"])
@@ -161,3 +162,46 @@ def report_f1_threshold(
         model_name=f"{model_name} (umbral val → test)",
     )
     return threshold, labels_opt, metrics
+
+
+def run_final_comparison(
+    bundle_if: ModelBundle,
+    bundle_lof: ModelBundle,
+    bundle_ae: ModelBundle,
+    y_val,
+    y_test,
+) -> pd.DataFrame:
+    """
+    Comparativa final de los tres modelos de S5-7: umbral max F1 en val, métricas en test.
+    No reentrena; reutiliza scores_val y scores (test) de cada bundle.
+    """
+    y_va = np.asarray(getattr(y_val, "values", y_val)).ravel()
+    y_te = np.asarray(getattr(y_test, "values", y_test)).ravel()
+
+    candidates = [
+        ("Isolation Forest", bundle_if),
+        ("LOF (k=20)", bundle_lof),
+        ("Autoencoder", bundle_ae),
+    ]
+
+    results: dict[str, dict] = {}
+    rows: list[dict] = []
+
+    for name, bundle in candidates:
+        threshold, _ = find_optimal_threshold(y_va, bundle.scores_val)
+        y_pred_val = apply_threshold(bundle.scores_val, threshold)
+        metrics_val = get_metrics(
+            y_va, y_pred_val, bundle.scores_val, model_name=name, verbose=False
+        )
+        y_pred = apply_threshold(bundle.scores, threshold)
+        metrics = get_metrics(
+            y_te, y_pred, bundle.scores, model_name=name, verbose=False
+        )
+        metrics["threshold"] = round(threshold, 4)
+        metrics["precision_val"] = metrics_val["precision"]
+        metrics["recall_val"] = metrics_val["recall"]
+        results[name] = metrics
+        rows.append({"model": name, **metrics})
+
+    compare_models(results, title="Comparativa final")
+    return pd.DataFrame(rows)

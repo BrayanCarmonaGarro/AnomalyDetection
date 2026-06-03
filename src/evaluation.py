@@ -3,6 +3,10 @@ evaluation.py
 Cálculo de métricas, visualizaciones y comparativa entre modelos.
 """
 
+from __future__ import annotations
+
+from typing import Literal
+
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import (
@@ -103,17 +107,21 @@ def plot_score_distribution(scores: np.ndarray, y_true: np.ndarray, model_name: 
     plt.show()
 
 
-def find_optimal_threshold(y_true: np.ndarray, scores: np.ndarray):
+def find_optimal_threshold(
+    y_true: np.ndarray,
+    scores: np.ndarray,
+    criterion: Literal["f1"] = "f1",
+):
     """
-    Escanea todos los umbrales posibles del score y devuelve el que maximiza F1.
+    Escanea umbrales del score en validation y devuelve el óptimo maximizando F1.
     Retorna (threshold_optimo, labels_con_threshold_optimo).
-    Usar sobre el conjunto de validación, no sobre test.
+    Usar sobre validación, no sobre test.
     """
     from sklearn.metrics import precision_recall_curve
 
     precision, recall, thresholds = precision_recall_curve(y_true, scores)
     f1 = 2 * precision[:-1] * recall[:-1] / (precision[:-1] + recall[:-1] + 1e-10)
-    best_idx = np.argmax(f1)
+    best_idx = int(np.argmax(f1))
     best_threshold = thresholds[best_idx]
     best_labels = (scores >= best_threshold).astype(int)
     return float(best_threshold), best_labels
@@ -223,7 +231,8 @@ def compare_models(results: dict, title: str = "Comparativa de Modelos"):
     width = min(0.8 / max(n, 1), 0.25)
     colors = ["#2563EB", "#16A34A", "#DC2626", "#D97706", "#7C3AED", "#0891B2"]
 
-    fig, ax = plt.subplots(figsize=(10, 5))
+    figsize = (12, 6) if n == 3 else (10, 5)
+    fig, ax = plt.subplots(figsize=figsize)
     names = list(results.keys())
     for i, name in enumerate(names):
         vals = [results[name].get(m, 0) for m in metrics_to_plot]

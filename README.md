@@ -9,9 +9,9 @@ AnomalyDetection/
 ├── src/
 │   ├── preprocessing.py    # Limpieza, feature engineering, escalado y split train/val/test
 │   ├── eda.py              # Gráficos y utilidades del análisis exploratorio
-│   ├── models.py           # Candidatos ML y NL; entrenamiento, predicción y serialización
+│   ├── models.py           # Isolation Forest, LOF y Autoencoder; entrenamiento y predicción
 │   ├── evaluation.py       # Métricas, curvas ROC/PR, comparativa entre modelos
-│   └── tuning.py           # Búsqueda de hiperparámetros y selección de ganadores
+│   └── pipeline.py         # Orquestación y comparativa final (S8)
 ├── app.py                  # Streamlit
 ├── models/                 # Modelos serializados (.pkl, .keras)
 ├── data.csv                # Dataset de transacciones (no versionado en git)
@@ -22,8 +22,9 @@ AnomalyDetection/
 ### Cómo fluye el proyecto
 
 1. `proyecto.ipynb` importa funciones de `src/` para mantener el notebook limpio y narrativo.
-2. Umbrales se calibran en validation; métricas finales y ganador se reportan en test.
-3. Opcionalmente, los modelos pueden serializarse en `models/`; `app.py` los cargaría sin re-ejecutar el notebook.
+2. En S5-7 se entrenan Isolation Forest, LOF (k=20) y Autoencoder.
+3. En S8, `run_final_comparison` reporta métricas en test sin reentrenar.
+4. Opcionalmente, los modelos pueden serializarse en `models/`; `app.py` los cargaría sin re-ejecutar el notebook.
 
 ## Dataset
 
@@ -37,13 +38,11 @@ Dataset sintético de transacciones con tarjeta de crédito, generado con la her
 
 ## Modelos
 
-Candidatos evaluados:
+Evaluados en el proyecto:
 
 - **Isolation Forest** — aislamiento en árboles aleatorios.
-- **LOF** — anomalías por densidad local.
-- **One-Class SVM** — frontera de decisión en espacio de features.
+- **LOF (k=20)** — anomalías por densidad local.
 - **Autoencoder** — error de reconstrucción sobre comportamiento normal.
-- **Denoising Autoencoder** — AE con ruido gaussiano en entrenamiento.
 
 ## Setup
 
