@@ -277,3 +277,24 @@ def load_autoencoder(
     model = keras.models.load_model(model_path)
     threshold = joblib.load(threshold_path)
     return model, threshold
+
+# ---------------------------------------------------------------------------
+# Serialización de bundles completos (modelo + scaler + refs)
+# ---------------------------------------------------------------------------
+
+def save_scaler(scaler, path: str = "models/scaler.pkl"):
+    joblib.dump(scaler, path)
+    print(f"Scaler guardado en {path}")
+
+
+def load_scaler(path: str = "models/scaler.pkl"):
+    return joblib.load(path)
+
+
+def save_refs(ref_min: float, ref_max: float, path: str):
+    joblib.dump({"ref_min": ref_min, "ref_max": ref_max}, path)
+    print(f"Refs guardados en {path}")
+
+
+def load_refs(path: str) -> dict:
+    return joblib.load(path)
