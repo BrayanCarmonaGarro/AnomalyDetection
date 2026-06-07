@@ -171,7 +171,7 @@ def split_data_three_way(
 
 def get_feature_columns() -> list:
     """Devuelve la lista de columnas que entran al modelo después del preprocesamiento."""
-    base = ['amt', 'log_amt', 'city_pop', 'hour', 'day_of_week', 'is_night', 'age', 'distance']
+    base = ['amt', 'city_pop', 'hour', 'day_of_week', 'is_night', 'log_amt', 'age', 'distance']
     cats = [
         'cat_entertainment', 'cat_food_dining', 'cat_gas_transport',
         'cat_grocery_net', 'cat_grocery_pos', 'cat_health_fitness',
