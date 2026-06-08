@@ -90,3 +90,13 @@ pip install -r requirements.txt
 ```bash
 jupyter lab
 ```
+
+### Cómo correr el frontend
+
+Se deben de seguir los siguientes pasos:
+
+--> 1. Descarga el documento .pkl de este drive y colocalo en la carpeta models con los demás (https://drive.google.com/file/d/1Dyw7aw5Bm5h0KGNmraAbUHPGH2mdNx6g/view?usp=sharing)
+--> 2. Entra a cd api y corre el comando python -m venv .venv para crear el entorno virtual
+--> 3. Ahí mismo corre -venv/scripts/activate
+--> 4. Corre  uvicorn api:app --reload --port 8000
+--> 5. Corre en otra terminal cd frontend y ejecuta npm install y después npm run dev
