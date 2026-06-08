@@ -16,7 +16,7 @@ const EMPTY = {
   merch_lat: '',
   merch_long: '',
   city_pop: '',
-  dob: '1985-03-15',
+  dob: '',
   model: 'lof',
 }
 
@@ -71,7 +71,7 @@ function AddTransactionForm({ onAdd }) {
   const handle = (e) => setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
 
   const submit = () => {
-    if (!form.amt || !form.trans_date_trans_time || !form.lat || !form.long || !form.merch_lat || !form.merch_long || !form.city_pop) {
+    if (!form.amt || !form.trans_date_trans_time || !form.lat || !form.long || !form.merch_lat || !form.merch_long || !form.city_pop || !form.dob) {
       alert('Completá todos los campos')
       return
     }
@@ -98,7 +98,7 @@ function AddTransactionForm({ onAdd }) {
         style={{
           background: 'var(--accent-light)',
           color: 'var(--accent)',
-          border: '1px dashed rgba(99,102,241,0.4)',
+          border: '1px dashed rgba(201,125,78,0.4)',
           borderRadius: 'var(--radius-sm)',
           padding: '10px',
           width: '100%',
@@ -171,6 +171,11 @@ function AddTransactionForm({ onAdd }) {
         </div>
       </div>
 
+      <div className='form-group'>
+        <label>Fecha de nacimiento del titular</label>
+        <input name='dob' value={form.dob} onChange={handle} placeholder='1985-03-15' />
+      </div>
+
       <div className='grid-2'>
         <button className='btn-primary' onClick={submit}>Agregar</button>
         <button
@@ -202,7 +207,7 @@ export default function ContextualForm({ onAnalyze, loading }) {
     merch_lat: '',
     merch_long: '',
     city_pop: '',
-    dob: '1985-03-15',
+    dob: '',
     model: 'lof',
   })
   const [model, setModel] = useState('lof')
@@ -221,7 +226,7 @@ export default function ContextualForm({ onAnalyze, loading }) {
 
   const submit = () => {
     if (refs.length < 2) { alert('Necesitás al menos 2 transacciones de referencia'); return }
-    if (!target.amt || !target.trans_date_trans_time || !target.lat || !target.long || !target.merch_lat || !target.merch_long || !target.city_pop) {
+    if (!target.amt || !target.trans_date_trans_time || !target.lat || !target.long || !target.merch_lat || !target.merch_long || !target.city_pop || !target.dob) {
       alert('Completá todos los campos de la transacción a evaluar')
       return
     }
@@ -246,7 +251,7 @@ export default function ContextualForm({ onAnalyze, loading }) {
 
       {/* Transacciones de referencia */}
       <div className='card'>
-<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div className='card-title' style={{ marginBottom: 0 }}>
               Transacciones de referencia
@@ -272,7 +277,7 @@ export default function ContextualForm({ onAnalyze, loading }) {
               style={{
                 background: 'transparent',
                 color: 'var(--accent)',
-                border: '1px solid rgba(99,102,241,0.3)',
+                border: '1px solid rgba(201,125,78,0.3)',
                 borderRadius: 'var(--radius-sm)',
                 padding: '6px 12px',
                 fontSize: 12,
@@ -350,6 +355,11 @@ export default function ContextualForm({ onAnalyze, loading }) {
               <label>Long comercio</label>
               <input name='merch_long' value={target.merch_long} onChange={handleTarget} type='number' step='any' />
             </div>
+          </div>
+
+          <div className='form-group'>
+            <label>Fecha de nacimiento del titular</label>
+            <input name='dob' value={target.dob} onChange={handleTarget} placeholder='1985-03-15' />
           </div>
 
           <button className='btn-primary' onClick={submit} disabled={loading}>
