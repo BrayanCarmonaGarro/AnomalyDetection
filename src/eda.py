@@ -37,17 +37,17 @@ def plot_amount_by_class(df: pd.DataFrame) -> None:
     print(df.groupby('is_fraud')['amt'].describe().rename(index={0: 'Normal', 1: 'Fraude'}).to_string())
 
     data = df[['amt', 'is_fraud']].copy()
-    data['Clase'] = data['is_fraud'].map({0: 'Normal', 1: 'Fraude'})
+    data['class_label'] = data['is_fraud'].map({0: 'Normal', 1: 'Fraude'})
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-    sns.boxplot(data=data, x='Clase', y='amt', hue='Clase',
+    sns.boxplot(data=data, x='class_label', y='amt', hue='class_label',
                 palette={'Normal': 'steelblue', 'Fraude': 'tomato'}, legend=False, ax=axes[0])
     axes[0].set_title('Monto por clase')
     axes[0].set_ylabel('Monto (USD)')
 
     # Escala logarítmica para ver la distribución sin que los outliers dominen
-    sns.boxplot(data=data, x='Clase', y='amt', hue='Clase',
+    sns.boxplot(data=data, x='class_label', y='amt', hue='class_label',
                 palette={'Normal': 'steelblue', 'Fraude': 'tomato'}, legend=False, ax=axes[1])
     axes[1].set_yscale('log')
     axes[1].set_title('Monto por clase (escala log)')
@@ -83,12 +83,12 @@ def plot_time_patterns(df: pd.DataFrame) -> None:
     data = df[['trans_date_trans_time', 'is_fraud']].copy()
     data['datetime'] = pd.to_datetime(data['trans_date_trans_time'])
     day_map = {0: 'Lunes', 1: 'Martes', 2: 'Miércoles', 3: 'Jueves', 4: 'Viernes', 5: 'Sábado', 6: 'Domingo'}
-    data['hora'] = data['datetime'].dt.hour
-    data['dia'] = data['datetime'].dt.dayofweek.map(day_map)
+    data['hour'] = data['datetime'].dt.hour
+    data['weekday'] = data['datetime'].dt.dayofweek.map(day_map)
 
-    fraud_by_hour = data.groupby('hora')['is_fraud'].mean().mul(100).round(2)
+    fraud_by_hour = data.groupby('hour')['is_fraud'].mean().mul(100).round(2)
     day_order = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
-    fraud_by_day = data.groupby('dia')['is_fraud'].mean().mul(100).round(2).reindex(day_order)
+    fraud_by_day = data.groupby('weekday')['is_fraud'].mean().mul(100).round(2).reindex(day_order)
 
     print("Tasa de fraude por hora:")
     print(fraud_by_hour.to_string())
@@ -118,14 +118,14 @@ def plot_ranges(df: pd.DataFrame) -> None:
     stats = pd.DataFrame({
         'min': numeric_cols.min(),
         'max': numeric_cols.max(),
-        'rango': numeric_cols.max() - numeric_cols.min()
-    }).sort_values('rango', ascending=False)
+        'value_range': numeric_cols.max() - numeric_cols.min()
+    }).sort_values('value_range', ascending=False)
 
     print("Min, max y rango por variable numérica:")
     print(stats.to_string(float_format=lambda x: f'{x:,.2f}'))
 
     plt.figure(figsize=(10, 5))
-    stats['rango'].plot(kind='bar', color='steelblue', edgecolor='white')
+    stats['value_range'].plot(kind='bar', color='steelblue', edgecolor='white')
     plt.title('Rango de variables numéricas')
     plt.ylabel('Rango (max - min)')
     plt.xticks(rotation=45, ha='right')
@@ -150,8 +150,8 @@ def plot_numeric_analysis(df: pd.DataFrame) -> None:
     stats = pd.DataFrame({
         'min': numeric_cols.min(),
         'max': numeric_cols.max(),
-        'rango': numeric_cols.max() - numeric_cols.min()
-    }).sort_values('rango', ascending=False)
+        'value_range': numeric_cols.max() - numeric_cols.min()
+    }).sort_values('value_range', ascending=False)
 
     print("Min, max y rango por columna numérica:")
     print(stats.to_string(float_format=lambda x: f'{x:,.2f}'))
@@ -183,22 +183,27 @@ def plot_text_analysis(df: pd.DataFrame) -> None:
 
 def plot_fraud_by_gender(df: pd.DataFrame) -> None:
     stats = df.groupby('gender')['is_fraud'].agg(['sum', 'count', 'mean']).reset_index()
-    stats.columns = ['Género', 'Fraudes', 'Total', 'Tasa']
-    stats['Tasa (%)'] = (stats['Tasa'] * 100).round(2)
-    stats['Género'] = stats['Género'].map({'M': 'Masculino', 'F': 'Femenino'})
+    stats.columns = ['gender', 'fraud_count', 'total', 'fraud_rate']
+    stats['fraud_rate_pct'] = (stats['fraud_rate'] * 100).round(2)
+    stats['gender'] = stats['gender'].map({'M': 'Masculino', 'F': 'Femenino'})
 
     print("Tasa de fraude por género:")
-    print(stats[['Género', 'Total', 'Fraudes', 'Tasa (%)']].to_string(index=False))
+    print(stats.rename(columns={
+        'gender': 'Género',
+        'total': 'Total',
+        'fraud_count': 'Fraudes',
+        'fraud_rate_pct': 'Tasa (%)',
+    })[['Género', 'Total', 'Fraudes', 'Tasa (%)']].to_string(index=False))
 
     fig, axes = plt.subplots(1, 2, figsize=(10, 4))
 
-    axes[0].bar(stats['Género'], stats['Total'], color='steelblue', label='Total')
-    axes[0].bar(stats['Género'], stats['Fraudes'], color='tomato', label='Fraudes')
+    axes[0].bar(stats['gender'], stats['total'], color='steelblue', label='Total')
+    axes[0].bar(stats['gender'], stats['fraud_count'], color='tomato', label='Fraudes')
     axes[0].set_title('Transacciones totales vs fraudes por género')
     axes[0].set_ylabel('Transacciones')
     axes[0].legend()
 
-    axes[1].bar(stats['Género'], stats['Tasa (%)'], color='tomato')
+    axes[1].bar(stats['gender'], stats['fraud_rate_pct'], color='tomato')
     axes[1].set_title('Tasa de fraude por género')
     axes[1].set_ylabel('Tasa de fraude (%)')
 
