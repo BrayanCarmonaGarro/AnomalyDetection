@@ -1,3 +1,6 @@
+import { useState } from 'react'
+import { getVerdict } from '../../api/client'
+
 const AlertIcon = ({ color }) => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
     stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -117,6 +120,146 @@ const ScoreCard = ({ title, subtitle, result, color }) => {
   )
 }
 
+function VerdictSection({ result }) {
+  const [verdict, setVerdict] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  const handleVerdict = async () => {
+    setLoading(true)
+    setVerdict(null)
+    setError(null)
+    try {
+      const res = await getVerdict({
+        global_result: result.global,
+        statistical_result: result.statistical,
+        lof_local_result: result.lof_local,
+        n_references: result.n_references,
+        model: result.global.model,
+      })
+      setVerdict(res.data.verdict)
+    } catch (e) {
+      setError('No se pudo generar el veredicto. Intentá de nuevo.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      {!verdict && !loading && (
+        <button
+          onClick={handleVerdict}
+          style={{
+            width: '100%',
+            padding: '10px',
+            borderRadius: '6px',
+            background: 'var(--accent-light)',
+            color: 'var(--accent)',
+            border: '1px solid rgba(201,125,78,0.25)',
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: 'pointer',
+            transition: 'all 0.15s',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+          }}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+            stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 8v4l3 3" />
+          </svg>
+          Generar veredicto con IA
+        </button>
+      )}
+
+      {loading && (
+        <div style={{
+          padding: '16px',
+          background: 'var(--bg-secondary)',
+          borderRadius: '6px',
+          fontSize: 13,
+          color: 'var(--text-muted)',
+          textAlign: 'center',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            style={{ animation: 'spin 1s linear infinite' }}>
+            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+          </svg>
+          Analizando con IA...
+        </div>
+      )}
+
+      {error && (
+        <div style={{
+          padding: '12px 14px',
+          background: 'var(--danger-light)',
+          borderRadius: '6px',
+          fontSize: 13,
+          color: 'var(--danger)',
+          borderLeft: '2px solid var(--danger)',
+        }}>
+          {error}
+        </div>
+      )}
+
+      {verdict && (
+        <div style={{
+          padding: '16px',
+          background: 'var(--bg-secondary)',
+          borderRadius: '6px',
+          borderLeft: '2px solid var(--accent)',
+          fontSize: 13,
+          color: 'var(--text-secondary)',
+          lineHeight: 1.7,
+          whiteSpace: 'pre-wrap',
+        }}>
+          <div style={{
+            fontSize: 11,
+            fontWeight: 600,
+            color: 'var(--accent)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            marginBottom: 10,
+          }}>
+            Veredicto IA
+          </div>
+          {verdict}
+          <button
+            onClick={() => setVerdict(null)}
+            style={{
+              display: 'block',
+              marginTop: 12,
+              background: 'transparent',
+              color: 'var(--text-muted)',
+              fontSize: 11,
+              padding: 0,
+              cursor: 'pointer',
+            }}
+          >
+            Regenerar
+          </button>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
+  )
+}
+
 const MODEL_LABELS = {
   lof: 'Local Outlier Factor',
   isolation_forest: 'Isolation Forest',
@@ -201,7 +344,7 @@ export default function ContextualResult({ result }) {
               <div style={{
                 width: 32, height: 32, borderRadius: '8px',
                 background: val ? 'var(--danger-light)' : 'var(--success-light)',
-                border: `1px solid ${val ? 'rgba(184,92,74,0.2)' : 'rgba(122,158,126,0.2)'}`,
+                border: `1px solid ${val ? 'rgba(184,92,74,0.25)' : 'rgba(122,158,126,0.25)'}`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
                 {val ? <AlertIcon color='var(--danger)' /> : <CheckIcon color='var(--success)' />}
@@ -214,29 +357,8 @@ export default function ContextualResult({ result }) {
           ))}
         </div>
 
-        {/* Veredicto */}
-        {(() => {
-          const votes = [result.global.is_anomaly, result.statistical.is_anomaly, result.lof_local.is_anomaly]
-          const anomalyCount = votes.filter(Boolean).length
-          let msg, color
-          if (anomalyCount === 3) { msg = 'Los tres análisis coinciden: transacción muy sospechosa.'; color = 'var(--danger)' }
-          else if (anomalyCount === 2) { msg = 'Dos de tres análisis detectan anomalía. Se recomienda revisión.'; color = 'var(--warning)' }
-          else if (anomalyCount === 1) { msg = 'Solo un análisis detecta anomalía. Riesgo bajo.'; color = 'var(--text-secondary)' }
-          else { msg = 'Los tres análisis coinciden: transacción normal.'; color = 'var(--success)' }
-          return (
-            <div style={{
-              marginTop: 14, padding: '11px 14px',
-              background: 'var(--bg-secondary)',
-              borderRadius: '6px',
-              borderLeft: `2px solid ${color}`,
-              fontSize: 13, color,
-              display: 'flex', alignItems: 'flex-start', gap: 8,
-            }}>
-              <InfoIcon color={color} />
-              {msg}
-            </div>
-          )
-        })()}
+        {/* IA */}
+        <VerdictSection result={result} />
       </div>
     </div>
   )

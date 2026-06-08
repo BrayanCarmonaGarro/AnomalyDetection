@@ -19,3 +19,5 @@ export const predict = (data) => api.post('/predict', data)
 
 //analisis contextual
 export const analyzeContextual = (data) => api.post('/analyze-contextual', data)
+
+export const getVerdict = (data) => api.post('/verdict', data)

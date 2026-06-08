@@ -100,3 +100,4 @@ Se deben de seguir los siguientes pasos:
 --> 3. Ahí mismo corre -venv/scripts/activate
 --> 4. Corre  uvicorn api:app --reload --port 8000
 --> 5. Corre en otra terminal cd frontend y ejecuta npm install y después npm run dev
+--> 6. Crea .env con GROQ_API_KEY=api_key_de_groq (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)
