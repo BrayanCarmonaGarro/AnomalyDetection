@@ -16,6 +16,13 @@ import numpy as np
 import pandas as pd
 import joblib
 
+import os
+from dotenv import load_dotenv
+from groq import Groq
+
+load_dotenv()
+groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
 from src.preprocessing import feature_engineering, clean_data, get_feature_columns
 from src.models import (
     load_isolation_forest, load_lof, load_autoencoder,
@@ -370,25 +377,46 @@ class ContextualRequest(BaseModel):
 def compute_statistical_score(ref_features: np.ndarray, target_features: np.ndarray) -> dict:
     """
     Compara la transacción target contra el perfil estadístico de las referencias.
+    Excluye variables binarias del Z-score para evitar divisiones por std ≈ 0.
     Devuelve un score entre 0 y 1 y los detalles por dimensión.
     """
+    feature_cols = get_feature_columns()
+
+    # Identificar columnas continuas (excluir binarias: cat_* e is_night)
+    continuous_idx = [
+        i for i, col in enumerate(feature_cols)
+        if not col.startswith('cat_') and col != 'is_night'
+    ]
+
     mean = ref_features.mean(axis=0)
     std = ref_features.std(axis=0)
-    std[std < 1e-6] = 1e-6
 
-    z_scores = np.abs((target_features[0] - mean) / std)
-    score = float(np.clip(z_scores.mean() / 5.0, 0.0, 1.0))
+    # Solo calcular Z-score en columnas continuas con variación suficiente
+    z_scores_full = np.zeros(len(feature_cols))
+    for i in continuous_idx:
+        if std[i] > 1e-3:
+            z_scores_full[i] = abs(target_features[0][i] - mean[i]) / std[i]
+        else:
+            z_scores_full[i] = 0.0
 
-    feature_cols = get_feature_columns()
-    top_idx = np.argsort(z_scores)[::-1][:5]
+    # Score final usando solo columnas continuas con variación
+    active_z = [z_scores_full[i] for i in continuous_idx if std[i] > 1e-3]
+    if active_z:
+        score = float(np.clip(np.mean(active_z) / 3.0, 0.0, 1.0))
+    else:
+        score = 0.0
+
+    # Top 5 desviaciones solo de columnas continuas
+    continuous_z = [(i, z_scores_full[i]) for i in continuous_idx if std[i] > 1e-3]
+    continuous_z.sort(key=lambda x: x[1], reverse=True)
     top_deviations = [
         {
             "feature": feature_cols[i],
-            "z_score": round(float(z_scores[i]), 2),
+            "z_score": round(float(z), 2),
             "reference_mean": round(float(mean[i]), 4),
             "target_value": round(float(target_features[0][i]), 4),
         }
-        for i in top_idx
+        for i, z in continuous_z[:5]
     ]
 
     return {
@@ -459,3 +487,69 @@ def analyze_contextual(data: ContextualRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+# ---------------------------------------------------------------------------
+# Endpoint — Veredicto con IA
+# ---------------------------------------------------------------------------
+
+class VerdictRequest(BaseModel):
+    global_result: dict
+    statistical_result: dict
+    lof_local_result: dict
+    n_references: int
+    model: str
+
+
+@app.post("/verdict")
+def generate_verdict(data: VerdictRequest):
+    model_labels = {
+        "lof": "Local Outlier Factor",
+        "isolation_forest": "Isolation Forest",
+        "autoencoder": "Autoencoder",
+    }
+
+    def fmt_score(s): return f"{round(s * 100)}%"
+    def fmt_anomaly(b): return "anómala" if b else "normal"
+
+    prompt = f"""Sos un sistema experto en detección de fraude con tarjeta de crédito. 
+Se analizó una transacción usando tres métodos distintos. Tu tarea es explicar cada resultado 
+de forma clara y natural, y dar un veredicto final con una recomendación concreta.
+
+Resultados del análisis:
+
+1. Análisis global ({model_labels.get(data.model, data.model)}):
+   - Resultado: {fmt_anomaly(data.global_result.get("is_anomaly"))}
+   - Score de anomalía: {fmt_score(data.global_result.get("score", 0))}
+   - Este modelo fue entrenado con 1.47 millones de transacciones del dataset completo.
+
+2. Análisis estadístico (Z-score):
+   - Resultado: {fmt_anomaly(data.statistical_result.get("is_anomaly"))}
+   - Score de anomalía: {fmt_score(data.statistical_result.get("score", 0))}
+   - Variables más desviadas del perfil de referencia: {
+       ", ".join([
+           f'{d["feature"].replace("cat_", "").replace("_", " ")} (z={d["z_score"]})'
+           for d in data.statistical_result.get("top_deviations", [])
+       ]) or "ninguna"
+   }
+
+3. LOF local:
+   - Resultado: {fmt_anomaly(data.lof_local_result.get("is_anomaly"))}
+   - Score de anomalía: {fmt_score(data.lof_local_result.get("score", 0))}
+   - Entrenado con {data.n_references} transacciones de referencia del usuario.
+
+Respondé en español, de forma natural y sin usar markdown, asteriscos ni listas con guiones. 
+Escribí en máximo 1 parrafo de 4 lineas.
+Terminá siempre con una recomendación concreta: bloquear, revisar manualmente, o aprobar."""
+
+    try:
+        response = groq_client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=400,
+            temperature=0.4,
+        )
+        text = response.choices[0].message.content.strip()
+        return {"verdict": text}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generando veredicto: {str(e)}")
